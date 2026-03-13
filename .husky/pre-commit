@@ -1,0 +1,14 @@
+# Guard: block .env files from being committed
+ENV_FILES=$(git diff --cached --name-only | grep -E '\.env$|\.env\.local$' || true)
+if [ -n "$ENV_FILES" ]; then
+  echo "ERROR: Refusing to commit environment files:"
+  echo "$ENV_FILES"
+  echo "API keys belong in .env only — never committed. See .env.example."
+  exit 1
+fi
+
+# Staged file lint/format checks (biome for TS, ruff for Python)
+pnpm exec lint-staged
+
+# Full typecheck (fast with turbo cache)
+pnpm typecheck
