@@ -11,7 +11,7 @@ def format_sse(event: str, data: dict) -> str:
 
 async def stream_run(
     run_id: str, graph: object, input_data: dict
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[str]:
     """Stream execution events as SSE.
 
     Args:

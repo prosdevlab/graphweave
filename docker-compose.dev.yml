@@ -1,6 +1,6 @@
 services:
   execution:
-    image: python:3.11-slim
+    image: python:3.13-slim
     working_dir: /app
     volumes:
       - ./packages/execution:/app

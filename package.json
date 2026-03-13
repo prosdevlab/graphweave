@@ -32,7 +32,10 @@
     "*.{ts,tsx,js,jsx,json,css}": [
       "biome check --write --no-errors-on-unmatched"
     ],
-    "packages/execution/**/*.py": ["ruff check --fix", "ruff format"]
+    "packages/execution/**/*.py": [
+      "uv run --directory packages/execution ruff check --fix",
+      "uv run --directory packages/execution ruff format"
+    ]
   },
   "pnpm": {
     "onlyBuiltDependencies": ["@biomejs/biome", "esbuild"]
