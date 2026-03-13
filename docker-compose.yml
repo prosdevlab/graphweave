@@ -1,0 +1,9 @@
+services:
+  execution:
+    build: ./packages/execution
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/data
+    env_file:
+      - ./packages/execution/.env

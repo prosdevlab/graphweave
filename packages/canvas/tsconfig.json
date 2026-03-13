@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@store/*": ["./src/store/*"],
+      "@ui/*": ["./src/components/ui/*"],
+      "@shared/*": ["../../packages/shared/src/*"],
+      "@api/*": ["./src/api/*"]
+    }
+  },
+  "include": ["src"]
+}

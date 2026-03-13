@@ -1,0 +1,9 @@
+{
+  "name": "@graphweave/docs",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'docs site not yet configured'",
+    "build": "echo 'docs site not yet configured'"
+  }
+}

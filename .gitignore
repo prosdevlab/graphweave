@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Environment
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+
+# Vite
+packages/canvas/dist/
