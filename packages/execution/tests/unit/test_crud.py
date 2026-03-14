@@ -8,9 +8,11 @@ from app.db.crud import (
     create_graph,
     create_run,
     delete_graph,
+    delete_run,
     get_graph,
     get_run,
     list_graphs,
+    list_runs,
     list_runs_by_graph,
     update_graph,
     update_run,
@@ -155,10 +157,102 @@ async def test_list_runs_by_graph(db):
     graph = await create_graph(db, "G", {}, owner_id="owner-a")
     for i in range(5):
         await create_run(db, graph.id, "owner-a", "completed", {"i": i})
-    runs = await list_runs_by_graph(db, graph.id, owner_id="owner-a", limit=3)
+    runs, total = await list_runs_by_graph(db, graph.id, owner_id="owner-a", limit=3)
     assert len(runs) == 3
+    assert total == 5
     assert runs[0].created_at >= runs[1].created_at
 
 
 async def test_get_run_missing(db):
     assert await get_run(db, "nonexistent") is None
+
+
+# ── Run pagination & filtering ─────────────────────────────────────
+
+
+async def test_list_runs_by_graph_paginated(db):
+    graph = await create_graph(db, "G", {}, owner_id="o")
+    for i in range(5):
+        await create_run(db, graph.id, "o", "completed", {"i": i})
+    runs, total = await list_runs_by_graph(
+        db, graph.id, owner_id="o", limit=2, offset=0
+    )
+    assert len(runs) == 2
+    assert total == 5
+
+
+async def test_list_runs_by_graph_offset(db):
+    graph = await create_graph(db, "G", {}, owner_id="o")
+    for i in range(5):
+        await create_run(db, graph.id, "o", "completed", {"i": i})
+    runs, total = await list_runs_by_graph(
+        db, graph.id, owner_id="o", limit=2, offset=2
+    )
+    assert len(runs) == 2
+    assert total == 5
+
+
+async def test_list_runs_by_graph_status_filter(db):
+    graph = await create_graph(db, "G", {}, owner_id="o")
+    await create_run(db, graph.id, "o", "completed", {})
+    await create_run(db, graph.id, "o", "completed", {})
+    await create_run(db, graph.id, "o", "error", {})
+    runs, total = await list_runs_by_graph(
+        db, graph.id, owner_id="o", status="completed"
+    )
+    assert len(runs) == 2
+    assert total == 2
+
+
+async def test_list_runs_by_graph_owner_isolation(db):
+    graph = await create_graph(db, "G", {}, owner_id="o-a")
+    await create_run(db, graph.id, "o-a", "completed", {})
+    await create_run(db, graph.id, "o-b", "completed", {})
+    runs, total = await list_runs_by_graph(db, graph.id, owner_id="o-a")
+    assert len(runs) == 1
+    assert total == 1
+
+
+async def test_list_runs_all_graphs(db):
+    g1 = await create_graph(db, "G1", {}, owner_id="o")
+    g2 = await create_graph(db, "G2", {}, owner_id="o")
+    await create_run(db, g1.id, "o", "completed", {})
+    await create_run(db, g2.id, "o", "completed", {})
+    runs, total = await list_runs(db, owner_id="o")
+    assert len(runs) == 2
+    assert total == 2
+
+
+async def test_list_runs_graph_id_filter(db):
+    g1 = await create_graph(db, "G1", {}, owner_id="o")
+    g2 = await create_graph(db, "G2", {}, owner_id="o")
+    await create_run(db, g1.id, "o", "completed", {})
+    await create_run(db, g2.id, "o", "completed", {})
+    runs, total = await list_runs(db, owner_id="o", graph_id=g1.id)
+    assert len(runs) == 1
+    assert total == 1
+    assert runs[0].graph_id == g1.id
+
+
+async def test_list_runs_status_filter(db):
+    graph = await create_graph(db, "G", {}, owner_id="o")
+    await create_run(db, graph.id, "o", "completed", {})
+    await create_run(db, graph.id, "o", "error", {})
+    await create_run(db, graph.id, "o", "error", {})
+    runs, total = await list_runs(db, owner_id="o", status="error")
+    assert len(runs) == 2
+    assert total == 2
+
+
+async def test_delete_run_success(db):
+    graph = await create_graph(db, "G", {}, owner_id="o")
+    run = await create_run(db, graph.id, "o", "completed", {})
+    assert await delete_run(db, run.id, owner_id="o") is True
+    assert await get_run(db, run.id) is None
+
+
+async def test_delete_run_wrong_owner(db):
+    graph = await create_graph(db, "G", {}, owner_id="o-a")
+    run = await create_run(db, graph.id, "o-a", "completed", {})
+    assert await delete_run(db, run.id, owner_id="o-b") is False
+    assert await get_run(db, run.id) is not None

@@ -274,25 +274,97 @@ async def list_runs_by_graph(
     db: aiosqlite.Connection,
     graph_id: str,
     owner_id: str | None = None,
-    limit: int = 10,
-) -> list[Run]:
-    # None = admin, no filter. Route layer must enforce.
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Run], int]:
+    """Return (runs, total_count) for a specific graph with pagination."""
+    where = ["graph_id = ?"]
+    params: list[object] = [graph_id]
+    if owner_id is not None:
+        where.append("owner_id = ?")
+        params.append(owner_id)
+    if status is not None:
+        where.append("status = ?")
+        params.append(status)
+
+    where_clause = " AND ".join(where)
+    count_cursor = await db.execute(
+        f"SELECT COUNT(*) FROM runs WHERE {where_clause}",  # noqa: S608
+        params,
+    )
+    total = (await count_cursor.fetchone())[0]
+
+    cursor = await db.execute(
+        f"SELECT id, graph_id, owner_id, status, input_json, "  # noqa: S608
+        "final_state_json, duration_ms, created_at, error, "
+        "paused_node_id, paused_prompt "
+        f"FROM runs WHERE {where_clause} "
+        "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        [*params, limit, offset],
+    )
+    rows = await cursor.fetchall()
+    return _rows_to_runs(rows), total
+
+
+async def list_runs(
+    db: aiosqlite.Connection,
+    owner_id: str | None = None,
+    graph_id: str | None = None,
+    status: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Run], int]:
+    """Return (runs, total_count) across all graphs with pagination."""
+    where: list[str] = []
+    params: list[object] = []
+    if owner_id is not None:
+        where.append("owner_id = ?")
+        params.append(owner_id)
+    if graph_id is not None:
+        where.append("graph_id = ?")
+        params.append(graph_id)
+    if status is not None:
+        where.append("status = ?")
+        params.append(status)
+
+    where_clause = (" WHERE " + " AND ".join(where)) if where else ""
+    count_cursor = await db.execute(
+        f"SELECT COUNT(*) FROM runs{where_clause}",  # noqa: S608
+        params,
+    )
+    total = (await count_cursor.fetchone())[0]
+
+    cursor = await db.execute(
+        "SELECT id, graph_id, owner_id, status, input_json, "
+        "final_state_json, duration_ms, created_at, error, "
+        "paused_node_id, paused_prompt "
+        f"FROM runs{where_clause} "  # noqa: S608
+        "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+        [*params, limit, offset],
+    )
+    rows = await cursor.fetchall()
+    return _rows_to_runs(rows), total
+
+
+async def delete_run(
+    db: aiosqlite.Connection,
+    run_id: str,
+    owner_id: str | None = None,
+) -> bool:
+    """Delete a run by ID. Returns True if deleted."""
     if owner_id is not None:
         cursor = await db.execute(
-            "SELECT id, graph_id, owner_id, status, input_json, final_state_json, "
-            "duration_ms, created_at, error, paused_node_id, paused_prompt "
-            "FROM runs WHERE graph_id = ? AND owner_id = ? "
-            "ORDER BY created_at DESC LIMIT ?",
-            (graph_id, owner_id, limit),
+            "DELETE FROM runs WHERE id = ? AND owner_id = ?",
+            (run_id, owner_id),
         )
     else:
-        cursor = await db.execute(
-            "SELECT id, graph_id, owner_id, status, input_json, final_state_json, "
-            "duration_ms, created_at, error, paused_node_id, paused_prompt "
-            "FROM runs WHERE graph_id = ? ORDER BY created_at DESC LIMIT ?",
-            (graph_id, limit),
-        )
-    rows = await cursor.fetchall()
+        cursor = await db.execute("DELETE FROM runs WHERE id = ?", (run_id,))
+    await db.commit()
+    return cursor.rowcount > 0
+
+
+def _rows_to_runs(rows: list) -> list[Run]:
     return [
         Run(
             id=row[0],
