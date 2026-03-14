@@ -65,4 +65,7 @@ Biome handles formatting and linting. No ESLint.
 .claude/skills/gw-frontend/      — React 19 patterns, Zustand slices, React Flow, SSE hook
 .claude/skills/gw-execution/     — FastAPI structure, API key auth, scopes, LangGraph builder, tool registry
 .claude/skills/gw-testing/       — MockLLM, test structure, what runs in CI vs manually
+.claude/skills/gw-api-design/   — REST endpoint design, response envelopes, pagination, status codes
+.claude/skills/gw-error-handling/ — exception hierarchy, tool error patterns, LLM retry, logging
+.claude/skills/gw-security/     — API key auth, input validation, CORS, secrets, SSRF prevention
 ```
