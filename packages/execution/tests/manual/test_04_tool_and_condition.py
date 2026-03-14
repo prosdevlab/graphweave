@@ -5,7 +5,7 @@ start → calculator tool → condition(tool_error) → success or error path �
 Uses FakeListChatModel for the error recovery LLM (no key needed for that path).
 The calculator tool is real.
 
-Usage: cd packages/execution && uv run python scripts/test_04_tool_and_condition.py
+Usage: cd packages/execution && uv run python tests/manual/test_04_tool_and_condition.py
 """
 
 import asyncio

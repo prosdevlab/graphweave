@@ -4,7 +4,7 @@ start → condition(field_equals) → branch_a (Gemini) or branch_b (mock) → e
 
 Tests both paths. First run uses real Gemini, second uses FakeListChatModel.
 
-Usage: cd packages/execution && uv run python scripts/test_03_branching.py
+Usage: cd packages/execution && uv run python tests/manual/test_03_branching.py
 """
 
 import asyncio
