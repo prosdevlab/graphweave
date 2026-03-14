@@ -17,10 +17,12 @@ from slowapi.util import get_remote_address
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.db.connection import close_db, get_db_path, init_db
+from app.executor import RunManager
 from app.logging import setup_logging
 from app.middleware import ContentTypeMiddleware, RequestIDMiddleware
 from app.routes.auth import router as auth_router
 from app.routes.graphs import router as graphs_router
+from app.routes.runs import router as runs_router
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -33,6 +35,10 @@ tags_metadata = [
     {
         "name": "Graphs",
         "description": "Graph CRUD — create, read, update, and delete graphs.",
+    },
+    {
+        "name": "Runs",
+        "description": "Run execution — start, stream SSE, resume, and status.",
     },
 ]
 
@@ -53,7 +59,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.db = db
     logger.info("Database initialized at %s", db_path)
 
+    run_manager = RunManager()
+    app.state.run_manager = run_manager
+    logger.info("RunManager initialized")
+
     yield
+
+    # Cancel all active runs on shutdown
+    for run_id in list(run_manager._runs):
+        await run_manager.cancel_run(run_id)
+    logger.info("All active runs cancelled")
 
     await close_db(db)
     logger.info("Database connection closed")
@@ -76,7 +91,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_methods=["*"],
-    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID", "Last-Event-ID"],
     expose_headers=["X-Request-ID"],
 )
 app.add_middleware(RequestIDMiddleware)
@@ -127,6 +142,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded)
 
 app.include_router(auth_router)
 app.include_router(graphs_router)
+app.include_router(runs_router)
 
 
 # ── Root endpoints (unversioned) ────────────────────────────────────────
