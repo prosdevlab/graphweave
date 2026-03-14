@@ -46,7 +46,14 @@ class FileWriteTool(BaseTool):
 
         # Create parent directories
         parent = os.path.dirname(resolved)
-        os.makedirs(parent, exist_ok=True)
+        try:
+            os.makedirs(parent, exist_ok=True)
+        except OSError as exc:
+            return {
+                "success": False,
+                "error": f"Cannot create directories: {exc}",
+                "recoverable": False,
+            }
 
         # Open with O_NOFOLLOW to reject symlinks at the leaf
         flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW

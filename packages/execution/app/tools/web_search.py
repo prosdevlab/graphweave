@@ -22,7 +22,10 @@ class WebSearchTool(BaseTool):
                 "recoverable": False,
             }
 
-        max_results = min(int(inputs.get("max_results", 5)), _MAX_RESULTS)
+        try:
+            max_results = min(int(inputs.get("max_results", 5)), _MAX_RESULTS)
+        except (ValueError, TypeError):
+            max_results = 5
 
         tavily_key = os.environ.get("TAVILY_API_KEY")
         if tavily_key:

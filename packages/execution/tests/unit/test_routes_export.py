@@ -115,3 +115,16 @@ async def test_export_route_not_found(client, api_key):
     _, raw = api_key
     resp = await client.get("/v1/graphs/nonexistent/export", headers=_headers(raw))
     assert resp.status_code == 404
+
+
+async def test_export_route_wrong_owner(client, api_key):
+    """Export as different owner returns 404, not the graph code."""
+    _, raw_a = api_key
+    gid = await _create_graph(client, raw_a)
+
+    # Create a second user
+    db = app.state.db
+    _, raw_b = await create_test_key(db, scopes=SCOPES_DEFAULT, name="other")
+
+    resp = await client.get(f"/v1/graphs/{gid}/export", headers=_headers(raw_b))
+    assert resp.status_code == 404

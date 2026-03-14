@@ -53,6 +53,9 @@ def validate_url(url: str) -> tuple[str | None, str | None]:
         if resolved_ip is None:
             resolved_ip = str(ip)
 
+    if resolved_ip is None:
+        return (f"No usable IP addresses for hostname: {hostname}", None)
+
     return (None, resolved_ip)
 
 

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import ast
 
-from app.exporter import export_graph
+import pytest
+
+from app.exporter import ExportError, export_graph
 
 
 def _base_schema(**overrides):
@@ -371,3 +373,48 @@ def test_export_complex_graph():
 
     # Has checkpointer (human_input present)
     assert "InMemorySaver" in result["code"]
+
+
+# ── Security: identifier injection prevention ────────────────────────
+
+
+def test_malicious_node_id_rejected():
+    """node_id with code injection is rejected."""
+    schema = _base_schema()
+    schema["nodes"].insert(
+        -1,
+        {
+            "id": "x(s):\n    import os\ndef y",
+            "type": "tool",
+            "label": "Evil",
+            "position": {"x": 0, "y": 100},
+            "config": {
+                "tool_name": "calculator",
+                "input_map": {"expression": "result"},
+                "output_key": "result",
+            },
+        },
+    )
+    with pytest.raises(ExportError, match="Unsafe identifier"):
+        export_graph(schema)
+
+
+def test_malicious_output_key_rejected():
+    """output_key with injection characters is rejected."""
+    schema = _base_schema()
+    schema["nodes"].insert(
+        -1,
+        {
+            "id": "tool_1",
+            "type": "tool",
+            "label": "Tool",
+            "position": {"x": 0, "y": 100},
+            "config": {
+                "tool_name": "calculator",
+                "input_map": {"expression": "result"},
+                "output_key": 'result"}\nimport os',
+            },
+        },
+    )
+    with pytest.raises(ExportError, match="Unsafe identifier"):
+        export_graph(schema)
