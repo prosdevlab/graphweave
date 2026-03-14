@@ -7,9 +7,13 @@ import operator
 from collections import deque
 from typing import Annotated, NamedTuple
 
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
+from langgraph.types import interrupt
 
+from app.llm import get_llm
+from app.state_utils import resolve_input_map
 from app.tools.registry import get_tool
 
 logger = logging.getLogger(__name__)
@@ -274,6 +278,100 @@ def validate_schema(schema: dict) -> None:
     unreachable = non_structural - reachable
     if unreachable:
         logger.warning("Unreachable nodes: %s", unreachable)
+
+
+# ---------------------------------------------------------------------------
+# Node function factories
+# ---------------------------------------------------------------------------
+
+
+def _format_inputs(inputs: dict) -> str:
+    """Format resolved inputs as a string for LLM messages.
+
+    Single key → its string value. Multiple keys → ``key: value`` lines.
+    """
+    if len(inputs) == 1:
+        return str(next(iter(inputs.values())))
+    return "\n".join(f"{k}: {v}" for k, v in inputs.items())
+
+
+def _make_llm_node(node_id: str, config: dict, llm) -> callable:
+    """Return an async node function that calls an LLM."""
+
+    async def llm_node(state: dict) -> dict:
+        inputs = resolve_input_map(config["input_map"], state)
+        messages = []
+        if config.get("system_prompt"):
+            messages.append(SystemMessage(content=config["system_prompt"]))
+        user_content = _format_inputs(inputs)
+        messages.append(HumanMessage(content=user_content))
+        response = await llm.ainvoke(messages)
+        return {config["output_key"]: response.content}
+
+    llm_node.__name__ = f"llm_{node_id}"
+    return llm_node
+
+
+def _make_tool_node(node_id: str, config: dict) -> callable:
+    """Return a sync node function that runs a tool."""
+
+    def tool_node(state: dict) -> dict:
+        tool = get_tool(config["tool_name"])
+        inputs = resolve_input_map(config["input_map"], state)
+        result = tool.run(inputs)
+        return {config["output_key"]: result}
+
+    tool_node.__name__ = f"tool_{node_id}"
+    return tool_node
+
+
+def _make_passthrough_node() -> callable:
+    """Return a node function that does nothing (for condition nodes)."""
+
+    def passthrough(state: dict) -> dict:
+        return {}
+
+    return passthrough
+
+
+def _make_human_node(node_id: str, config: dict) -> callable:
+    """Return a node function that interrupts for human input."""
+
+    def human_node(state: dict) -> dict:
+        value = interrupt(
+            {
+                "prompt": config["prompt"],
+                "input_key": config["input_key"],
+                "node_id": node_id,
+            }
+        )
+        return {config["input_key"]: value}
+
+    human_node.__name__ = f"human_{node_id}"
+    return human_node
+
+
+def _create_node_function(node: dict, schema: dict, llm_override=None) -> callable:
+    """Create the appropriate node function for a given node."""
+    match node["type"]:
+        case "llm":
+            llm = llm_override or get_llm(
+                node["config"]["provider"],
+                node["config"]["model"],
+                node["config"].get("temperature", 0.7),
+                node["config"].get("max_tokens", 1024),
+            )
+            return _make_llm_node(node["id"], node["config"], llm)
+        case "tool":
+            return _make_tool_node(node["id"], node["config"])
+        case "condition":
+            return _make_passthrough_node()
+        case "human_input":
+            return _make_human_node(node["id"], node["config"])
+        case _:
+            raise GraphBuildError(
+                f"Unknown node type: {node['type']}", node_ref=node["id"]
+            )
 
 
 # ---------------------------------------------------------------------------

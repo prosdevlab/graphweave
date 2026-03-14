@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import inspect
 import operator
 from typing import Annotated, get_type_hints
 
 import pytest
+from langchain_core.language_models import FakeListChatModel
 from langgraph.graph.message import add_messages
 
 from app.builder import (
     GraphBuildError,
     _build_defaults,
+    _create_node_function,
+    _format_inputs,
+    _make_llm_node,
+    _make_tool_node,
     _merge_reducer,
     build_state_type,
     validate_schema,
@@ -337,3 +343,152 @@ class TestBuildDefaults:
         d2 = _build_defaults(fields)
         d1["items"].append("modified")
         assert d2["items"] == []
+
+
+# ---------------------------------------------------------------------------
+# Node function factory tests
+# ---------------------------------------------------------------------------
+
+
+class TestFormatInputs:
+    def test_single_key(self):
+        assert _format_inputs({"question": "What is 2+2?"}) == "What is 2+2?"
+
+    def test_multi_key(self):
+        result = _format_inputs({"topic": "math", "level": "easy"})
+        assert "topic: math" in result
+        assert "level: easy" in result
+
+
+class TestLLMNode:
+    async def test_llm_node_basic(self):
+        mock_llm = FakeListChatModel(responses=["42"])
+        config = {
+            "system_prompt": "",
+            "input_map": {"question": "query"},
+            "output_key": "result",
+        }
+        node_fn = _make_llm_node("llm_1", config, mock_llm)
+        state = {"query": "meaning of life?"}
+        result = await node_fn(state)
+        assert result == {"result": "42"}
+
+    async def test_llm_node_with_system_prompt(self):
+        mock_llm = FakeListChatModel(responses=["Hello!"])
+        config = {
+            "system_prompt": "You are a friendly bot.",
+            "input_map": {"greeting": "query"},
+            "output_key": "result",
+        }
+        node_fn = _make_llm_node("llm_1", config, mock_llm)
+        result = await node_fn({"query": "hi"})
+        assert result == {"result": "Hello!"}
+
+    async def test_llm_node_input_map_expression(self):
+        mock_llm = FakeListChatModel(responses=["resolved"])
+        config = {
+            "system_prompt": "",
+            "input_map": {"data": "items[-1]"},
+            "output_key": "result",
+        }
+        node_fn = _make_llm_node("llm_1", config, mock_llm)
+        result = await node_fn({"items": ["a", "b", "c"]})
+        assert result == {"result": "resolved"}
+
+    async def test_llm_node_multi_key_format(self):
+        mock_llm = FakeListChatModel(responses=["answer"])
+        config = {
+            "system_prompt": "",
+            "input_map": {"topic": "topic", "level": "level"},
+            "output_key": "result",
+        }
+        node_fn = _make_llm_node("llm_1", config, mock_llm)
+        result = await node_fn({"topic": "math", "level": "hard"})
+        assert result == {"result": "answer"}
+
+
+class TestToolNode:
+    def test_tool_node_calculator(self):
+        config = {
+            "tool_name": "calculator",
+            "input_map": {"expression": "expr"},
+            "output_key": "result",
+        }
+        node_fn = _make_tool_node("tool_1", config)
+        result = node_fn({"expr": "2 + 2"})
+        assert result["result"]["success"] is True
+        assert result["result"]["result"] == "4"
+
+    def test_tool_node_output_envelope(self):
+        config = {
+            "tool_name": "calculator",
+            "input_map": {"expression": "expr"},
+            "output_key": "result",
+        }
+        node_fn = _make_tool_node("tool_1", config)
+        result = node_fn({"expr": "1 + 1"})
+        envelope = result["result"]
+        assert "success" in envelope
+        assert "result" in envelope
+
+    def test_tool_node_error_envelope(self):
+        config = {
+            "tool_name": "calculator",
+            "input_map": {"expression": "expr"},
+            "output_key": "result",
+        }
+        node_fn = _make_tool_node("tool_1", config)
+        result = node_fn({"expr": "invalid_expression"})
+        envelope = result["result"]
+        assert envelope["success"] is False
+
+
+class TestCreateNodeFunction:
+    def test_dispatches_llm(self):
+        mock_llm = FakeListChatModel(responses=["ok"])
+        node = {
+            "id": "n1",
+            "type": "llm",
+            "config": {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "system_prompt": "",
+                "temperature": 0.7,
+                "max_tokens": 100,
+                "input_map": {"q": "query"},
+                "output_key": "result",
+            },
+        }
+        fn = _create_node_function(node, {}, llm_override=mock_llm)
+        assert inspect.iscoroutinefunction(fn)
+
+    def test_dispatches_tool(self):
+        node = {
+            "id": "n1",
+            "type": "tool",
+            "config": {
+                "tool_name": "calculator",
+                "input_map": {"expression": "expr"},
+                "output_key": "result",
+            },
+        }
+        fn = _create_node_function(node, {})
+        assert not inspect.iscoroutinefunction(fn)
+
+    def test_dispatches_condition(self):
+        node = {
+            "id": "n1",
+            "type": "condition",
+            "config": {
+                "condition": {
+                    "type": "field_equals",
+                    "field": "x",
+                    "value": "y",
+                    "branch": "go",
+                },
+                "branches": {"go": "end"},
+                "default_branch": "go",
+            },
+        }
+        fn = _create_node_function(node, {})
+        assert fn({}) == {}
