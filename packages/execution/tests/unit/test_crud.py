@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import aiosqlite
 import pytest
 
 from app.db.crud import (
@@ -16,79 +15,115 @@ from app.db.crud import (
     update_graph,
     update_run,
 )
-from app.db.migrations.runner import run_migrations
-
-
-@pytest.fixture
-async def db(tmp_path):
-    db_path = str(tmp_path / "test.db")
-    run_migrations(db_path)
-    conn = await aiosqlite.connect(db_path)
-    conn.row_factory = aiosqlite.Row
-    yield conn
-    await conn.close()
-
 
 # ── Graphs ──────────────────────────────────────────────────────────────
 
 
 async def test_create_and_get_graph(db):
     schema = {"nodes": [], "edges": []}
-    graph = await create_graph(db, "My Graph", schema)
+    graph = await create_graph(db, "My Graph", schema, owner_id="owner-a")
     assert graph.name == "My Graph"
     assert graph.schema_json == schema
+    assert graph.owner_id == "owner-a"
     assert graph.id
     assert graph.created_at
 
-    fetched = await get_graph(db, graph.id)
+    fetched = await get_graph(db, graph.id, owner_id="owner-a")
     assert fetched is not None
     assert fetched.name == "My Graph"
     assert fetched.schema_json == schema
 
 
 async def test_list_graphs(db):
-    await create_graph(db, "A", {})
-    await create_graph(db, "B", {})
-    graphs = await list_graphs(db)
+    await create_graph(db, "A", {}, owner_id="owner-a")
+    await create_graph(db, "B", {}, owner_id="owner-a")
+    graphs, total = await list_graphs(db, owner_id="owner-a")
     assert len(graphs) == 2
+    assert total == 2
     names = {g.name for g in graphs}
     assert names == {"A", "B"}
 
 
 async def test_update_graph(db):
-    graph = await create_graph(db, "Old", {"metadata": {}})
-    updated = await update_graph(db, graph.id, "New", {"metadata": {}})
+    graph = await create_graph(db, "Old", {"metadata": {}}, owner_id="owner-a")
+    updated = await update_graph(
+        db, graph.id, "New", {"metadata": {}}, owner_id="owner-a"
+    )
     assert updated is not None
     assert updated.name == "New"
     assert updated.updated_at > graph.created_at
-    # Schema should have synced name
     assert updated.schema_json["name"] == "New"
+    # Fix: update_graph now re-reads row, so created_at should be populated
+    assert updated.created_at != ""
 
 
 async def test_update_graph_nonexistent(db):
-    result = await update_graph(db, "missing-id", "X", {})
+    result = await update_graph(db, "missing-id", "X", {}, owner_id="owner-a")
     assert result is None
 
 
 async def test_delete_graph(db):
-    graph = await create_graph(db, "ToDelete", {})
-    assert await delete_graph(db, graph.id) is True
-    assert await get_graph(db, graph.id) is None
-    assert await delete_graph(db, graph.id) is False
+    graph = await create_graph(db, "ToDelete", {}, owner_id="owner-a")
+    assert await delete_graph(db, graph.id, owner_id="owner-a") is True
+    assert await get_graph(db, graph.id, owner_id="owner-a") is None
+    assert await delete_graph(db, graph.id, owner_id="owner-a") is False
 
 
 async def test_get_graph_missing(db):
-    assert await get_graph(db, "nonexistent") is None
+    assert await get_graph(db, "nonexistent", owner_id="owner-a") is None
+
+
+# ── Owner isolation ─────────────────────────────────────────────────────
+
+
+async def test_owner_isolation_get(db):
+    graph = await create_graph(db, "A's graph", {}, owner_id="owner-a")
+    # Owner B cannot see owner A's graph
+    assert await get_graph(db, graph.id, owner_id="owner-b") is None
+
+
+async def test_owner_isolation_list(db):
+    await create_graph(db, "A1", {}, owner_id="owner-a")
+    await create_graph(db, "A2", {}, owner_id="owner-a")
+    await create_graph(db, "B1", {}, owner_id="owner-b")
+
+    a_graphs, a_total = await list_graphs(db, owner_id="owner-a")
+    b_graphs, b_total = await list_graphs(db, owner_id="owner-b")
+    assert len(a_graphs) == 2
+    assert a_total == 2
+    assert len(b_graphs) == 1
+    assert b_total == 1
+
+
+async def test_admin_sees_all(db):
+    await create_graph(db, "A1", {}, owner_id="owner-a")
+    await create_graph(db, "B1", {}, owner_id="owner-b")
+    # Admin passes owner_id=None → no filter
+    all_graphs, total = await list_graphs(db, owner_id=None)
+    assert len(all_graphs) == 2
+    assert total == 2
+
+
+async def test_owner_isolation_update(db):
+    graph = await create_graph(db, "A's graph", {}, owner_id="owner-a")
+    result = await update_graph(db, graph.id, "Hacked", {}, owner_id="owner-b")
+    assert result is None  # Can't update someone else's graph
+
+
+async def test_owner_isolation_delete(db):
+    graph = await create_graph(db, "A's graph", {}, owner_id="owner-a")
+    assert await delete_graph(db, graph.id, owner_id="owner-b") is False
 
 
 # ── Runs ────────────────────────────────────────────────────────────────
 
 
 async def test_create_and_get_run(db):
-    graph = await create_graph(db, "G", {})
-    run = await create_run(db, graph.id, "running", {"prompt": "hello"})
+    graph = await create_graph(db, "G", {}, owner_id="owner-a")
+    run = await create_run(db, graph.id, "owner-a", "running", {"prompt": "hello"})
     assert run.status == "running"
     assert run.input == {"prompt": "hello"}
+    assert run.owner_id == "owner-a"
 
     fetched = await get_run(db, run.id)
     assert fetched is not None
@@ -96,8 +131,8 @@ async def test_create_and_get_run(db):
 
 
 async def test_update_run_partial(db):
-    graph = await create_graph(db, "G", {})
-    run = await create_run(db, graph.id, "running", {})
+    graph = await create_graph(db, "G", {}, owner_id="owner-a")
+    run = await create_run(db, graph.id, "owner-a", "running", {})
     updated = await update_run(db, run.id, status="completed", duration_ms=42)
     assert updated is not None
     assert updated.status == "completed"
@@ -105,8 +140,8 @@ async def test_update_run_partial(db):
 
 
 async def test_update_run_invalid_field(db):
-    graph = await create_graph(db, "G", {})
-    run = await create_run(db, graph.id, "running", {})
+    graph = await create_graph(db, "G", {}, owner_id="owner-a")
+    run = await create_run(db, graph.id, "owner-a", "running", {})
     with pytest.raises(ValueError, match="Cannot update fields"):
         await update_run(db, run.id, bad_field="nope")
 
@@ -117,12 +152,11 @@ async def test_update_run_nonexistent(db):
 
 
 async def test_list_runs_by_graph(db):
-    graph = await create_graph(db, "G", {})
+    graph = await create_graph(db, "G", {}, owner_id="owner-a")
     for i in range(5):
-        await create_run(db, graph.id, "completed", {"i": i})
-    runs = await list_runs_by_graph(db, graph.id, limit=3)
+        await create_run(db, graph.id, "owner-a", "completed", {"i": i})
+    runs = await list_runs_by_graph(db, graph.id, owner_id="owner-a", limit=3)
     assert len(runs) == 3
-    # Should be ordered DESC by created_at
     assert runs[0].created_at >= runs[1].created_at
 
 

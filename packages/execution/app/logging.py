@@ -13,6 +13,7 @@ class JSONFormatter(logging.Formatter):
             {
                 "ts": self.formatTime(record),
                 "level": record.levelname,
+                "request_id": getattr(record, "request_id", None),
                 "run_id": getattr(record, "run_id", None),
                 "node_id": getattr(record, "node_id", None),
                 "msg": record.getMessage(),

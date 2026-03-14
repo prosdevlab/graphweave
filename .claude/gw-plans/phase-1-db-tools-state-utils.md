@@ -424,3 +424,31 @@ Manual: start Docker dev container → `/health` returns `{"status": "ok", "llm_
 - **Phase 4**: API routes
 - **Phase 5**: Exporter + remaining tools + custom httpx transport for SSRF
 - **Phase 6**: Deployment — Cloud Run + Turso + Vercel + CI/CD
+
+---
+
+## Implementation Log — Deviations
+
+### Deviation 1: Extracted `BaseTool` to `app/tools/base.py`
+
+**Plan said**: Keep `BaseTool` and `ToolNotFoundError` in `app/tools/registry.py`.
+
+**What happened**: Circular import — `registry.py` imports tool classes, each tool imports `BaseTool` from `registry.py`. Python can't resolve the cycle when tests import individual tools directly.
+
+**Fix**: Extracted to `app/tools/base.py`. Tools import from `base.py`, registry imports both. No circular dependency. One extra file, cleaner import graph.
+
+### Deviation 2: `simpleeval` resource limits are module-level, not instance-level
+
+**Plan said**: Set `evaluator.MAX_POWER = 1000` on each `EvalWithCompoundTypes` instance.
+
+**What happened**: These are module-level globals. `safe_power()` reads the module global, not instance attributes. Setting them per-instance had no effect.
+
+**Fix**: Patched at module level at import time in `calculator.py` and `state_utils.py`. All evaluators share the same limits — acceptable.
+
+### Deviation 3: Missing field raises `NameNotDefined`, not `KeyError`
+
+**Plan said**: Catch `KeyError` for missing fields in `resolve_input_map`.
+
+**What happened**: `simpleeval` raises `NameNotDefined` (custom exception). Its constructor takes two args so re-wrapping with `type(exc)(...)` failed.
+
+**Fix**: Catch both `KeyError` and `NameNotDefined`. Wrap as `ValueError` with available fields listed.
