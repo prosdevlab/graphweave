@@ -1260,6 +1260,87 @@ class TestHumanInputIntegration:
 
 
 # ---------------------------------------------------------------------------
+# Checkpointer parameter tests
+# ---------------------------------------------------------------------------
+
+
+class TestCheckpointerParameter:
+    def _simple_schema(self):
+        return {
+            "id": "cp-test",
+            "name": "CheckpointerTest",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "llm_1",
+                    "type": "llm",
+                    "label": "LLM",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "You are a helper.",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 200},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "llm_1"},
+                {"id": "e2", "source": "llm_1", "target": "e"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+
+    def test_checkpointer_parameter(self):
+        """Explicit checkpointer is used when provided."""
+        mock = FakeListChatModel(responses=["hi"])
+        saver = InMemorySaver()
+        result = build_graph(
+            self._simple_schema(), llm_override=mock, checkpointer=saver
+        )
+        assert result.graph.checkpointer is saver
+
+    def test_checkpointer_none_preserves_behavior(self):
+        """No checkpointer arg on non-human-input graph compiles without one."""
+        mock = FakeListChatModel(responses=["hi"])
+        result = build_graph(self._simple_schema(), llm_override=mock)
+        assert result.graph.checkpointer is None
+
+    def test_checkpointer_overrides_human_input_auto_detection(self):
+        """Explicit checkpointer takes precedence over human_input auto-detect."""
+        schema = TestHumanInputIntegration()._human_input_schema()
+        mock = FakeListChatModel(responses=["hi"])
+        saver = InMemorySaver()
+        result = build_graph(schema, llm_override=mock, checkpointer=saver)
+        # Must be the exact instance we passed, not a new InMemorySaver
+        assert result.graph.checkpointer is saver
+
+
+# ---------------------------------------------------------------------------
 # LLM router tests (review findings — async routing + substring collision)
 # ---------------------------------------------------------------------------
 
