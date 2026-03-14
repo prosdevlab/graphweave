@@ -9,6 +9,7 @@ from collections.abc import Callable
 from typing import Annotated, NamedTuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
@@ -493,8 +494,17 @@ def build_graph(
     schema: dict,
     *,
     llm_override=None,
+    checkpointer: BaseCheckpointSaver | None = None,
 ) -> BuildResult:
     """Build a LangGraph StateGraph from a GraphSchema dict.
+
+    Args:
+        schema: A GraphSchema dict.
+        llm_override: Optional LLM instance to use instead of creating one.
+        checkpointer: Optional checkpointer for graph compilation. When
+            provided, overrides the default auto-detection (which only adds
+            InMemorySaver for human_input graphs). The executor passes this
+            to enable aget_state() on all graphs.
 
     Returns a BuildResult with the compiled graph and state defaults.
     Use ainvoke()/astream() — never sync invoke() in async contexts (FastAPI).
@@ -552,10 +562,12 @@ def build_graph(
         router_fn = _make_router(cond_id, cond_node["config"], schema, llm_override)
         graph.add_conditional_edges(cond_id, router_fn, branch_map)
 
-    # 8. Compile — add checkpointer if human_input nodes exist
+    # 8. Compile — use provided checkpointer, or auto-detect for human_input
     has_human_input = any(n["type"] == "human_input" for n in schema["nodes"])
     try:
-        if has_human_input:
+        if checkpointer is not None:
+            compiled = graph.compile(checkpointer=checkpointer)
+        elif has_human_input:
             from langgraph.checkpoint.memory import InMemorySaver
 
             compiled = graph.compile(checkpointer=InMemorySaver())
