@@ -406,3 +406,30 @@ async def test_delete_active_run_rejected(client, api_key):
     resp = await client.delete(f"/v1/runs/{run.id}", headers=_headers(raw))
     assert resp.status_code == 409
     assert "cancel it first" in resp.json()["detail"].lower()
+
+
+async def test_delete_live_run_in_manager_rejected(client, api_key):
+    """Delete a run that's live in RunManager — tests ownership check."""
+    _, raw = api_key
+    gid = await _create_pause_graph(client, raw)
+    resp = await client.post(f"/v1/graphs/{gid}/run", headers=_headers(raw), json={})
+    run_id = resp.json()["run_id"]
+
+    # Wait for pause (run is live in RunManager)
+    for _ in range(50):
+        resp = await client.get(
+            f"/v1/runs/{run_id}/status",
+            headers=_headers(raw),
+        )
+        if resp.json()["status"] == "paused":
+            break
+        await asyncio.sleep(0.1)
+
+    # Owner can see 409 (active run)
+    resp = await client.delete(f"/v1/runs/{run_id}", headers=_headers(raw))
+    assert resp.status_code == 409
+
+    # Different owner gets 404 (not 409 — no info leak)
+    _, raw_b = await create_test_key(app.state.db, name="other")
+    resp = await client.delete(f"/v1/runs/{run_id}", headers=_headers(raw_b))
+    assert resp.status_code == 404

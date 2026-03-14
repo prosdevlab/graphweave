@@ -54,6 +54,10 @@ Biome handles formatting and linting. No ESLint.
 - Every tool response includes `{ success, recoverable }`. No silent failures.
 - Migrations run on server startup inside transactions. Server refuses to
   start if a migration fails.
+- **Code review before PR.** Always run the `code-reviewer` agent (which
+  launches security-reviewer, logic-reviewer, and quality-reviewer in
+  parallel) on the branch diff before creating a pull request. Address
+  any CRITICAL or WARNING findings before merging.
 
 ---
 
