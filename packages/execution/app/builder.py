@@ -375,6 +375,114 @@ def _create_node_function(node: dict, schema: dict, llm_override=None) -> callab
 
 
 # ---------------------------------------------------------------------------
+# Condition routing functions
+# ---------------------------------------------------------------------------
+
+
+def _router_field_equals(condition: dict, default: str) -> callable:
+    def router(state: dict) -> str:
+        if state.get(condition["field"]) == condition["value"]:
+            return condition["branch"]
+        return default
+
+    return router
+
+
+def _router_field_contains(condition: dict, default: str) -> callable:
+    def router(state: dict) -> str:
+        field_val = state.get(condition["field"], "")
+        if condition["value"] in str(field_val):
+            return condition["branch"]
+        return default
+
+    return router
+
+
+def _router_field_exists(condition: dict, default: str) -> callable:
+    def router(state: dict) -> str:
+        if condition["field"] in state and state[condition["field"]] is not None:
+            return condition["branch"]
+        return default
+
+    return router
+
+
+def _router_llm(condition: dict, default: str, llm_override=None) -> callable:
+    async def router(state: dict) -> str:
+        options = condition["options"]
+        prompt = (
+            f"{condition['prompt']}\n\n"
+            f"Respond with exactly one of: {', '.join(options)}"
+        )
+        routing_llm = llm_override or get_llm(
+            "openai",
+            condition.get("routing_model", "gpt-4o-mini"),
+            0.0,
+            100,
+        )
+        response = await routing_llm.ainvoke([HumanMessage(content=prompt)])
+        choice = response.content.strip().lower()
+        # Sort by length descending to avoid partial matches
+        for opt in sorted(options, key=len, reverse=True):
+            if opt.lower() in choice:
+                return opt
+        return default
+
+    return router
+
+
+def _router_tool_error(condition: dict, tool_output_key: str) -> callable:
+    def router(state: dict) -> str:
+        tool_output = state.get(tool_output_key, {})
+        if isinstance(tool_output, dict) and tool_output.get("success"):
+            return condition["on_success"]
+        return condition["on_error"]
+
+    return router
+
+
+def _router_iteration_limit(condition: dict) -> callable:
+    def router(state: dict) -> str:
+        count = state.get(condition["field"], 0)
+        if count >= condition["max"]:
+            return condition["exceeded"]
+        return condition["continue"]
+
+    return router
+
+
+def _make_router(
+    node_id: str, config: dict, schema: dict, llm_override=None
+) -> callable:
+    """Create a routing function for a condition node."""
+    condition = config["condition"]
+    default = config.get("default_branch", "")
+
+    match condition["type"]:
+        case "field_equals":
+            router = _router_field_equals(condition, default)
+        case "field_contains":
+            router = _router_field_contains(condition, default)
+        case "field_exists":
+            router = _router_field_exists(condition, default)
+        case "llm_router":
+            router = _router_llm(condition, default, llm_override)
+        case "tool_error":
+            tool_output_key = _find_tool_output_key(schema, node_id)
+            router = _router_tool_error(condition, tool_output_key)
+        case "iteration_limit":
+            router = _router_iteration_limit(condition)
+        case _:
+            raise GraphBuildError(
+                f"Unknown condition type: {condition['type']}",
+                node_ref=node_id,
+            )
+
+    router.__name__ = f"route_{node_id}"
+    return router
+
+
+# ---------------------------------------------------------------------------
 # build_graph — placeholder until Commit 6 wires everything together
 # ---------------------------------------------------------------------------
 
