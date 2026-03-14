@@ -2,7 +2,7 @@
 
 Requires GEMINI_API_KEY in .env.
 
-Usage: cd packages/execution && uv run python scripts/test_02_real_llm.py
+Usage: cd packages/execution && uv run python tests/manual/test_02_real_llm.py
 """
 
 import asyncio

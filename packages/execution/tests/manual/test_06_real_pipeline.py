@@ -6,7 +6,7 @@ start → calculator → condition(tool_error) →
 
 Uses real Gemini API. Requires GEMINI_API_KEY in .env.
 
-Usage: cd packages/execution && uv run python scripts/test_06_real_pipeline.py
+Usage: cd packages/execution && uv run python tests/manual/test_06_real_pipeline.py
 """
 
 import asyncio

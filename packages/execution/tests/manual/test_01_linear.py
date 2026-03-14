@@ -3,7 +3,7 @@
 Uses FakeListChatModel (no API key needed).
 Verifies the simplest possible graph compiles and invokes.
 
-Usage: cd packages/execution && uv run python scripts/test_01_linear.py
+Usage: cd packages/execution && uv run python tests/manual/test_01_linear.py
 """
 
 import asyncio

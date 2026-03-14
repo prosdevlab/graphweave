@@ -4,7 +4,7 @@ start → human_input (interrupt) → llm (greet) → end
 
 Simulates the interrupt/resume lifecycle that Phase 3 executor will use.
 
-Usage: cd packages/execution && uv run python scripts/test_05_human_input.py
+Usage: cd packages/execution && uv run python tests/manual/test_05_human_input.py
 """
 
 import asyncio
