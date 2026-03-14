@@ -63,6 +63,6 @@ Biome handles formatting and linting. No ESLint.
 .claude/skills/gw-architecture/  — monorepo structure, Docker setup, layer rules detail
 .claude/skills/gw-schema/        — GraphSchema spec, node types, SSE events, migrations
 .claude/skills/gw-frontend/      — React 19 patterns, Zustand slices, React Flow, SSE hook
-.claude/skills/gw-execution/     — FastAPI structure, LangGraph builder, tool registry
+.claude/skills/gw-execution/     — FastAPI structure, API key auth, scopes, LangGraph builder, tool registry
 .claude/skills/gw-testing/       — MockLLM, test structure, what runs in CI vs manually
 ```

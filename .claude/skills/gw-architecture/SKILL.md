@@ -157,14 +157,18 @@ services:
 # docker-compose.dev.yml (dev — hot reload)
 services:
   execution:
-    image: python:3.11-slim
+    image: python:3.13-slim
     working_dir: /app
     volumes:
       - ./packages/execution:/app
       - ./data:/data
-    command: uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+    command: >
+      sh -c "pip install uv && uv sync &&
+        uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
     env_file: ./packages/execution/.env
 ```
+
+Start dev execution only: `pnpm dev:exec`
 
 ## Python dependency management (uv)
 
@@ -184,7 +188,7 @@ uv sync --frozen
 ## Dockerfile pattern
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.13-slim
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
@@ -214,20 +218,52 @@ RATE_LIMIT_PER_MINUTE=10
 ## FastAPI startup (main.py)
 
 ```python
-# Startup validation — fails fast with clear messages
-for key in ["GEMINI_API_KEY"]:   # at least one provider required
-    if not os.getenv(key):
-        raise RuntimeError(f"{key} not set. See .env.example.")
+# Lifespan — replaces deprecated @app.on_event("startup")
+@asynccontextmanager
+async def lifespan(app):
+    # LLM keys: warn, don't crash
+    # DB: init_db() → app.state.db
+    yield
+    # close_db()
 
-# CORS — explicit, not wildcard
+app = FastAPI(lifespan=lifespan, openapi_tags=tags_metadata)
+
+# Auth — X-API-Key header via fastapi.security.APIKeyHeader
+# All /v1/* routes require auth. /health and /settings stay open.
+# Bootstrap: uv run python -m app.cli create-key --name admin --scopes all
+
+# CORS — explicit origins and headers
 app.add_middleware(CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
-# Rate limiting — per-IP on run endpoint
-@app.post("/graphs/{id}/run")
-@limiter.limit("10/minute")
-async def run_graph(request: Request, ...): ...
+# Middleware stack (bottom-up: last added runs first)
+app.add_middleware(RequestIDMiddleware)   # X-Request-ID
+app.add_middleware(ContentTypeMiddleware) # 415 on non-JSON POST/PUT/PATCH
+
+# Rate limiting — 60/min default, headers enabled
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"],
+                  headers_enabled=True)
+```
+
+## API versioning
+
+- All business routes: `/v1/auth/*`, `/v1/graphs/*`
+- System routes (unversioned): `/health`, `/settings/providers`
+- Routers set prefix: `APIRouter(prefix="/v1/graphs")`
+
+## Response patterns
+
+```python
+# Success — flat, typed, proper HTTP codes
+# POST → 201, GET/PUT → 200, DELETE → 204 (empty body)
+# Lists → PaginatedResponse { items, total, limit, offset, has_more }
+
+# Errors — envelope with status_code in body
+# { "detail": "...", "status_code": 404 }
+# Custom exception handlers for HTTPException, RequestValidationError, RateLimitExceeded
 ```
 
 ## Structured logging
@@ -238,11 +274,12 @@ class JSONFormatter(logging.Formatter):
         return json.dumps({
             "ts": self.formatTime(record),
             "level": record.levelname,
+            "request_id": getattr(record, "request_id", None),
             "run_id": getattr(record, "run_id", None),
             "node_id": getattr(record, "node_id", None),
             "msg": record.getMessage(),
         })
 
 # Debug in production:
-# docker logs graphweave-execution | jq 'select(.run_id=="abc123")'
+# docker logs graphweave-execution | jq 'select(.request_id=="abc123")'
 ```
