@@ -194,6 +194,8 @@ class RunManager:
         if ctx is None:
             return False
         ctx.cancel_event.set()
+        # Unblock _wait_for_resume so the cancel is detected
+        ctx.resume_event.set()
         return True
 
     async def submit_resume(self, run_id: str, value: Any) -> bool:
