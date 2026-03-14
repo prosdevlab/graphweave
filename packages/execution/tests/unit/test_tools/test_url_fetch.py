@@ -17,25 +17,36 @@ def _fetch(inputs: dict) -> dict:
 
 
 def test_bad_url_no_scheme():
-    error = validate_url("not-a-url")
+    error, ip = validate_url("not-a-url")
     assert error is not None
     assert "http" in error.lower() or "scheme" in error.lower()
+    assert ip is None
 
 
 def test_ssrf_localhost():
     with patch("app.tools.url_fetch.socket.getaddrinfo") as mock_gai:
         mock_gai.return_value = [(None, None, None, None, ("127.0.0.1", 0))]
-        error = validate_url("http://localhost/secret")
+        error, ip = validate_url("http://localhost/secret")
     assert error is not None
     assert "private" in error.lower() or "blocked" in error.lower()
+    assert ip is None
 
 
 def test_ssrf_private_ip():
     with patch("app.tools.url_fetch.socket.getaddrinfo") as mock_gai:
         mock_gai.return_value = [(None, None, None, None, ("10.0.0.1", 0))]
-        error = validate_url("http://example.com/")
+        error, ip = validate_url("http://example.com/")
     assert error is not None
     assert "blocked" in error.lower()
+    assert ip is None
+
+
+def test_validate_url_returns_resolved_ip():
+    with patch("app.tools.url_fetch.socket.getaddrinfo") as mock_gai:
+        mock_gai.return_value = [(None, None, None, None, ("93.184.216.34", 0))]
+        error, ip = validate_url("http://example.com/")
+    assert error is None
+    assert ip == "93.184.216.34"
 
 
 # ── UrlFetchTool.run ────────────────────────────────────────────────────
@@ -47,7 +58,7 @@ def test_successful_fetch():
     mock_response.raise_for_status = MagicMock()
 
     with (
-        patch("app.tools.url_fetch.validate_url", return_value=None),
+        patch("app.tools.url_fetch.validate_url", return_value=(None, "93.184.216.34")),
         patch("app.tools.url_fetch.httpx.Client") as mock_client_cls,
         patch("app.tools.url_fetch.trafilatura.extract", return_value="Hello world"),
     ):
@@ -69,7 +80,7 @@ def test_empty_extraction():
     mock_response.raise_for_status = MagicMock()
 
     with (
-        patch("app.tools.url_fetch.validate_url", return_value=None),
+        patch("app.tools.url_fetch.validate_url", return_value=(None, "93.184.216.34")),
         patch("app.tools.url_fetch.httpx.Client") as mock_client_cls,
         patch("app.tools.url_fetch.trafilatura.extract", return_value=None),
     ):
@@ -93,7 +104,7 @@ def test_truncation():
     mock_response.raise_for_status = MagicMock()
 
     with (
-        patch("app.tools.url_fetch.validate_url", return_value=None),
+        patch("app.tools.url_fetch.validate_url", return_value=(None, "93.184.216.34")),
         patch("app.tools.url_fetch.httpx.Client") as mock_client_cls,
         patch("app.tools.url_fetch.trafilatura.extract", return_value=long_text),
     ):
@@ -111,7 +122,7 @@ def test_truncation():
 
 def test_timeout():
     with (
-        patch("app.tools.url_fetch.validate_url", return_value=None),
+        patch("app.tools.url_fetch.validate_url", return_value=(None, "93.184.216.34")),
         patch("app.tools.url_fetch.httpx.Client") as mock_client_cls,
     ):
         mock_client = MagicMock()

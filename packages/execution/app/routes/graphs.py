@@ -16,6 +16,7 @@ from app.db import crud
 from app.db.connection import get_db
 from app.schemas.graphs import (
     CreateGraphRequest,
+    ExportResponse,
     GraphResponse,
     SchemaValidationError,
     UpdateGraphRequest,
@@ -205,25 +206,23 @@ async def validate_graph(
 
 @router.get(
     "/{graph_id}/export",
+    response_model=ExportResponse,
     summary="Export graph as Python code",
-    responses={
-        404: {"description": "Graph not found"},
-        501: {"description": "Not implemented"},
-    },
+    responses={404: {"description": "Graph not found"}},
 )
-async def export_graph(
+async def export_graph_route(
     graph_id: str,
     auth: AuthContext = Depends(require_scope("graphs:read")),
     db=Depends(get_db),
-) -> None:
-    """Export graph as standalone Python code (not yet implemented)."""
+) -> ExportResponse:
+    """Export graph as standalone Python code."""
     graph = await crud.get_graph(db, graph_id, owner_id=owner_filter(auth))
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
-    raise HTTPException(
-        status_code=501,
-        detail="Export not implemented. Coming in a future release.",
-    )
+    from app.exporter import export_graph
+
+    result = export_graph(graph.schema_json)
+    return ExportResponse(code=result["code"], requirements=result["requirements"])
 
 
 # ── Run History ────────────────────────────────────────────────────────
