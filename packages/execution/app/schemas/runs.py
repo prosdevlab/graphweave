@@ -40,6 +40,19 @@ class RunListItem(BaseModel):
     error: str | None = None
 
 
+def run_to_list_item(run) -> dict:
+    """Convert a Run model to a RunListItem dict for list responses."""
+    return RunListItem(
+        id=run.id,
+        graph_id=run.graph_id,
+        status=run.status,
+        input=run.input,
+        duration_ms=run.duration_ms,
+        created_at=run.created_at,
+        error=run.error,
+    ).model_dump()
+
+
 class ResumeRunRequest(BaseModel):
     input: bool | str | dict | list | int | float = Field(
         ...,
