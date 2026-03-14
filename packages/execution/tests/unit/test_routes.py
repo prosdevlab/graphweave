@@ -309,3 +309,173 @@ async def test_invalid_request_body_422(client, user_key):
     )
     assert resp.status_code == 422
     assert resp.json()["status_code"] == 422
+
+
+# ── Validate / Export ──────────────────────────────────────────────────
+
+
+def _valid_schema():
+    return {
+        "id": "v",
+        "name": "Valid",
+        "version": 1,
+        "state": [
+            {"key": "messages", "type": "list", "reducer": "append"},
+            {"key": "result", "type": "string", "reducer": "replace"},
+        ],
+        "nodes": [
+            {
+                "id": "s",
+                "type": "start",
+                "label": "Start",
+                "position": {"x": 0, "y": 0},
+                "config": {},
+            },
+            {
+                "id": "tool_1",
+                "type": "tool",
+                "label": "Calc",
+                "position": {"x": 0, "y": 100},
+                "config": {
+                    "tool_name": "calculator",
+                    "input_map": {"expression": "result"},
+                    "output_key": "result",
+                },
+            },
+            {
+                "id": "e",
+                "type": "end",
+                "label": "End",
+                "position": {"x": 0, "y": 200},
+                "config": {},
+            },
+        ],
+        "edges": [
+            {"id": "e1", "source": "s", "target": "tool_1"},
+            {"id": "e2", "source": "tool_1", "target": "e"},
+        ],
+        "metadata": {
+            "created_at": "2026-01-01",
+            "updated_at": "2026-01-01",
+        },
+    }
+
+
+async def _create_graph(client, raw_key, schema=None):
+    resp = await client.post(
+        "/v1/graphs",
+        headers=_headers(raw_key),
+        json={
+            "name": "Test",
+            "schema_json": schema or _valid_schema(),
+        },
+    )
+    return resp.json()["id"]
+
+
+async def test_validate_valid_schema(client, user_key):
+    _, raw = user_key
+    gid = await _create_graph(client, raw)
+    resp = await client.post(
+        f"/v1/graphs/{gid}/validate",
+        headers=_headers(raw),
+        json={},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["valid"] is True
+    assert body["errors"] == []
+
+
+async def test_validate_invalid_schema_missing_start(client, user_key):
+    _, raw = user_key
+    bad = {
+        "id": "bad",
+        "name": "Bad",
+        "version": 1,
+        "state": [
+            {"key": "x", "type": "string", "reducer": "replace"},
+        ],
+        "nodes": [
+            {
+                "id": "e",
+                "type": "end",
+                "label": "End",
+                "position": {"x": 0, "y": 0},
+                "config": {},
+            },
+        ],
+        "edges": [],
+        "metadata": {
+            "created_at": "2026-01-01",
+            "updated_at": "2026-01-01",
+        },
+    }
+    gid = await _create_graph(client, raw, schema=bad)
+    resp = await client.post(
+        f"/v1/graphs/{gid}/validate",
+        headers=_headers(raw),
+        json={},
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["valid"] is False
+    assert len(body["errors"]) >= 1
+    assert body["errors"][0]["message"]
+
+
+async def test_validate_invalid_schema_unknown_tool(client, user_key):
+    _, raw = user_key
+    bad = _valid_schema()
+    bad["nodes"][1]["config"]["tool_name"] = "does_not_exist"
+    gid = await _create_graph(client, raw, schema=bad)
+    resp = await client.post(
+        f"/v1/graphs/{gid}/validate",
+        headers=_headers(raw),
+        json={},
+    )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["valid"] is False
+    assert body["errors"][0]["node_ref"] == "tool_1"
+
+
+async def test_validate_graph_not_found(client, user_key):
+    _, raw = user_key
+    resp = await client.post(
+        "/v1/graphs/nonexistent/validate",
+        headers=_headers(raw),
+        json={},
+    )
+    assert resp.status_code == 404
+
+
+async def test_validate_wrong_owner(client, admin_key):
+    _, admin_raw = admin_key
+    db = app.state.db
+    key_a, raw_a = await create_test_key(db, name="va")
+    key_b, raw_b = await create_test_key(db, name="vb")
+    gid = await _create_graph(client, raw_a)
+    resp = await client.post(
+        f"/v1/graphs/{gid}/validate",
+        headers=_headers(raw_b),
+        json={},
+    )
+    assert resp.status_code == 404
+
+
+async def test_export_returns_501(client, user_key):
+    _, raw = user_key
+    gid = await _create_graph(client, raw)
+    resp = await client.get(f"/v1/graphs/{gid}/export", headers=_headers(raw))
+    assert resp.status_code == 501
+    assert "not implemented" in resp.json()["detail"].lower()
+
+
+async def test_export_graph_not_found(client, user_key):
+    _, raw = user_key
+    resp = await client.get(
+        "/v1/graphs/nonexistent/export",
+        headers=_headers(raw),
+    )
+    assert resp.status_code == 404

@@ -47,6 +47,33 @@ class UpdateGraphRequest(BaseModel):
     schema_json: dict = Field(description="Updated GraphSchema document.")
 
 
+class SchemaValidationError(BaseModel):
+    """A single validation error from schema checking."""
+
+    message: str = Field(description="Human-readable error description.")
+    node_ref: str | None = Field(
+        default=None,
+        description="Node ID that caused the error, if applicable.",
+    )
+
+
+class ValidateResponse(BaseModel):
+    """Result of schema validation."""
+
+    valid: bool = Field(description="True if the schema is valid.")
+    errors: list[SchemaValidationError] = Field(
+        default_factory=list,
+        description="List of validation errors (empty when valid).",
+    )
+
+
+class ExportResponse(BaseModel):
+    """Exported Python code and requirements (Phase 5)."""
+
+    code: str = Field(description="Generated Python source code.")
+    requirements: str = Field(description="requirements.txt content.")
+
+
 class GraphResponse(BaseModel):
     """Graph resource representation."""
 
