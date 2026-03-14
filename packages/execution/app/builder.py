@@ -1,5 +1,19 @@
 """GraphSchema to LangGraph StateGraph builder."""
 
+from __future__ import annotations
+
+import logging
+import operator
+from collections import deque
+from typing import Annotated, NamedTuple
+
+from langgraph.graph.message import add_messages
+from langgraph.graph.state import CompiledStateGraph
+
+from app.tools.registry import get_tool
+
+logger = logging.getLogger(__name__)
+
 
 class GraphBuildError(Exception):
     """Raised when a graph cannot be compiled from the schema."""
@@ -9,18 +23,279 @@ class GraphBuildError(Exception):
         self.node_ref = node_ref
 
 
-def build_graph(schema: dict, llm_provider: str = "openai"):
+class BuildResult(NamedTuple):
+    """Result of build_graph: compiled graph + state field defaults."""
+
+    graph: CompiledStateGraph
+    defaults: dict
+
+
+# ---------------------------------------------------------------------------
+# State type generation
+# ---------------------------------------------------------------------------
+
+_TYPE_MAP: dict[str, type] = {
+    "string": str,
+    "number": float,
+    "boolean": bool,
+    "list": list,
+    "object": dict,
+}
+
+
+def _merge_reducer(left: dict, right: dict) -> dict:
+    """Deep-merge two dicts (used as reducer for 'merge' state fields)."""
+    result = {**left}
+    for key, value in right.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = _merge_reducer(result[key], value)
+        else:
+            result[key] = value
+    return result
+
+
+def _get_annotated_type(field: dict) -> type:
+    """Return the (possibly Annotated) type for a state field."""
+    base = _TYPE_MAP.get(field["type"])
+    if base is None:
+        raise GraphBuildError(
+            f"Unknown state field type: {field['type']}",
+            node_ref=field.get("key"),
+        )
+
+    reducer = field["reducer"]
+    if reducer == "replace":
+        return base
+    if reducer == "append":
+        if field["key"] == "messages":
+            return Annotated[list, add_messages]
+        return Annotated[list, operator.add]
+    if reducer == "merge":
+        return Annotated[dict, _merge_reducer]
+
+    raise GraphBuildError(
+        f"Unknown reducer: {reducer}",
+        node_ref=field.get("key"),
+    )
+
+
+def build_state_type(state_fields: list[dict]) -> type:
+    """Build a dynamic state class from StateField dicts.
+
+    Returns a plain class with ``__annotations__`` — LangGraph only needs
+    ``get_type_hints(schema, include_extras=True)`` to extract channels.
+    """
+    annotations = {f["key"]: _get_annotated_type(f) for f in state_fields}
+    graph_state = type("GraphState", (), {"__annotations__": annotations})
+    graph_state.__module__ = __name__  # Required for get_type_hints resolution
+    return graph_state
+
+
+def _build_defaults(state_fields: list[dict]) -> dict:
+    """Return safe default values for all state fields."""
+    _default_for_type = {
+        "string": "",
+        "number": 0,
+        "boolean": False,
+        "list": [],
+        "object": {},
+    }
+    defaults: dict = {}
+    for field in state_fields:
+        if "default" in field and field["default"] is not None:
+            defaults[field["key"]] = field["default"]
+        else:
+            # Use a fresh copy for mutable defaults
+            default = _default_for_type.get(field["type"])
+            if isinstance(default, (list, dict)):
+                defaults[field["key"]] = type(default)()
+            else:
+                defaults[field["key"]] = default
+    return defaults
+
+
+# ---------------------------------------------------------------------------
+# Schema validation
+# ---------------------------------------------------------------------------
+
+
+def _find_tool_output_key(schema: dict, condition_node_id: str) -> str:
+    """Trace edges backward from a tool_error condition to its source tool.
+
+    Returns the tool node's output_key.
+
+    Raises:
+        GraphBuildError: If the source is not a tool node.
+    """
+    nodes_by_id = {n["id"]: n for n in schema["nodes"]}
+    for edge in schema["edges"]:
+        if edge["target"] == condition_node_id:
+            source_node = nodes_by_id.get(edge["source"])
+            if source_node and source_node["type"] == "tool":
+                return source_node["config"]["output_key"]
+
+    raise GraphBuildError(
+        "tool_error condition must follow a tool node",
+        node_ref=condition_node_id,
+    )
+
+
+def validate_schema(schema: dict) -> None:
+    """Validate a GraphSchema dict. Raises GraphBuildError on failure."""
+    # 1. Required top-level keys
+    for key in ("id", "name", "version", "state", "nodes", "edges"):
+        if key not in schema:
+            raise GraphBuildError(f"Missing required key: {key}")
+
+    nodes = schema["nodes"]
+    edges = schema["edges"]
+    node_ids = {n["id"] for n in nodes}
+
+    # 2. Exactly one start node
+    start_nodes = [n for n in nodes if n["type"] == "start"]
+    if len(start_nodes) == 0:
+        raise GraphBuildError("Schema must have exactly one start node")
+    if len(start_nodes) > 1:
+        raise GraphBuildError(
+            "Schema must have exactly one start node",
+            node_ref=start_nodes[1]["id"],
+        )
+    start_id = start_nodes[0]["id"]
+
+    # 3. At least one end node
+    end_nodes = [n for n in nodes if n["type"] == "end"]
+    if len(end_nodes) == 0:
+        raise GraphBuildError("Schema must have at least one end node")
+
+    # 4. Unique node IDs
+    seen_ids: set[str] = set()
+    for node in nodes:
+        if node["id"] in seen_ids:
+            raise GraphBuildError(
+                f"Duplicate node ID: {node['id']}", node_ref=node["id"]
+            )
+        seen_ids.add(node["id"])
+
+    # 5. Valid edges — source and target reference existing nodes
+    for edge in edges:
+        if edge["source"] not in node_ids:
+            raise GraphBuildError(
+                f"Edge references nonexistent source: {edge['source']}",
+                node_ref=edge["source"],
+            )
+        if edge["target"] not in node_ids:
+            raise GraphBuildError(
+                f"Edge references nonexistent target: {edge['target']}",
+                node_ref=edge["target"],
+            )
+
+    # 6. Start has no incoming edges
+    for edge in edges:
+        if edge["target"] == start_id:
+            raise GraphBuildError(
+                "Start node must not have incoming edges", node_ref=start_id
+            )
+
+    # 7. End nodes have no outgoing edges
+    end_ids = {n["id"] for n in end_nodes}
+    for edge in edges:
+        if edge["source"] in end_ids:
+            raise GraphBuildError(
+                "End node must not have outgoing edges",
+                node_ref=edge["source"],
+            )
+
+    # 8. Tool names exist in registry
+    state_keys = {f["key"] for f in schema["state"]}
+    for node in nodes:
+        if node["type"] == "tool":
+            tool_name = node["config"]["tool_name"]
+            try:
+                get_tool(tool_name)
+            except Exception as exc:
+                raise GraphBuildError(
+                    f"Unknown tool: {tool_name}", node_ref=node["id"]
+                ) from exc
+
+        # 9. Output keys in state
+        if node["type"] in ("llm", "tool"):
+            output_key = node["config"]["output_key"]
+            if output_key not in state_keys:
+                raise GraphBuildError(
+                    f"output_key '{output_key}' not found in state fields",
+                    node_ref=node["id"],
+                )
+
+    # 10–11. Condition validation
+    for node in nodes:
+        if node["type"] != "condition":
+            continue
+        config = node["config"]
+        branches = config.get("branches", {})
+
+        # 10. All branch targets reference existing nodes
+        for branch_name, target_id in branches.items():
+            if target_id not in node_ids:
+                raise GraphBuildError(
+                    f"Condition branch '{branch_name}' references "
+                    f"nonexistent node: {target_id}",
+                    node_ref=node["id"],
+                )
+
+        # 11. default_branch must be a key in branches
+        default_branch = config.get("default_branch")
+        if default_branch and default_branch not in branches:
+            raise GraphBuildError(
+                f"default_branch '{default_branch}' is not a key in branches",
+                node_ref=node["id"],
+            )
+
+        # 12. tool_error source must be a tool node
+        condition = config.get("condition", {})
+        if condition.get("type") == "tool_error":
+            _find_tool_output_key(schema, node["id"])
+
+    # 13. Reachability — BFS from start (warning only, not a blocker)
+    reachable: set[str] = set()
+    queue: deque[str] = deque([start_id])
+    adjacency: dict[str, list[str]] = {}
+    for edge in edges:
+        adjacency.setdefault(edge["source"], []).append(edge["target"])
+    while queue:
+        current = queue.popleft()
+        if current in reachable:
+            continue
+        reachable.add(current)
+        for neighbor in adjacency.get(current, []):
+            if neighbor not in reachable:
+                queue.append(neighbor)
+
+    non_structural = {n["id"] for n in nodes if n["type"] not in ("start", "end")}
+    unreachable = non_structural - reachable
+    if unreachable:
+        logger.warning("Unreachable nodes: %s", unreachable)
+
+
+# ---------------------------------------------------------------------------
+# build_graph — placeholder until Commit 6 wires everything together
+# ---------------------------------------------------------------------------
+
+
+def build_graph(
+    schema: dict,
+    *,
+    llm_override=None,
+) -> BuildResult:
     """Build a LangGraph StateGraph from a GraphSchema dict.
 
-    Args:
-        schema: A GraphSchema dictionary.
-        llm_provider: The LLM provider to use for LLM nodes.
-
-    Returns:
-        A compiled LangGraph StateGraph.
+    Returns a BuildResult with the compiled graph and state defaults.
+    Use ainvoke()/astream() — never sync invoke() in async contexts (FastAPI).
+    Graphs with human_input nodes require
+    config={"configurable": {"thread_id": "..."}}.
+    Resume after interrupt requires Command(resume=value) as input.
 
     Raises:
         GraphBuildError: If the graph cannot be compiled.
     """
-    # TODO: Implement GraphSchema -> StateGraph conversion
+    # TODO: Full orchestration in Commit 6
     raise NotImplementedError("builder.build_graph not yet implemented")
