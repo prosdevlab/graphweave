@@ -10,8 +10,8 @@ Implementation deviations are logged at the bottom of each plan file.
 | Phase | Plan | Status | PR |
 |-------|------|--------|----|
 | 1 | [DB, Tools, State Utils](phase-1-db-tools-state-utils.md) | ✅ Merged | [#1](https://github.com/prosdevlab/graphweave/pull/1) |
-| 1.5 | [Scoped API Key Auth](phase-1.5-execution-auth.md) | 🔧 In progress | — |
-| 2 | GraphSchema → LangGraph builder | 📋 Not started | — |
+| 1.5 | [Scoped API Key Auth](phase-1.5-execution-auth.md) | ✅ Merged | [#2](https://github.com/prosdevlab/graphweave/pull/2) |
+| 2 | [GraphSchema → LangGraph Builder](phase-2-graph-schema-langgraph-builder.md) | 🔧 In progress | — |
 | 3 | Executor + SSE streaming | 📋 Not started | — |
 | 4 | API routes (run, stream, resume, validate, export) | 📋 Not started | — |
 | 5 | Exporter + remaining tools + SSRF transport | 📋 Not started | — |
