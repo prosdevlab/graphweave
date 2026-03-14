@@ -694,3 +694,56 @@ curl localhost:8000/graphs -H "X-API-Key: gw_<dev-key>"
 - Frontend auth UI
 - Audit logging
 - Rate limiting on authenticated routes (IP-based rate limiting already exists)
+
+---
+
+## Implementation Log — Deviations
+
+### Deviation 1: Added `B008` to ruff ignore list
+
+**Plan said**: Nothing about ruff config changes.
+
+**What happened**: Ruff's `B008` rule flags `Depends()` calls in function argument defaults — the standard FastAPI pattern. Every route handler triggered this.
+
+**Fix**: Added `ignore = ["B008"]` to `[tool.ruff.lint]` in `pyproject.toml`. Standard practice for FastAPI projects.
+
+### Deviation 2: Pydantic `schema_json` field name warning
+
+**Plan said**: Use `schema_json` as the Pydantic field name (matches DB column).
+
+**What happened**: Pydantic warns that `schema_json` shadows `BaseModel.model_json_schema`. Cosmetic but noisy in test output.
+
+**Fix**: Added `warnings.filterwarnings("ignore", ...)` and `model_config = ConfigDict(populate_by_name=True)` in `app/schemas/graphs.py`. Field name matches DB column and GraphSchema contract — renaming would be worse.
+
+### Deviation 3: `count_active_admin_keys` simplified
+
+**Plan said**: Query `SELECT COUNT(*)` then filter.
+
+**What happened**: Initial implementation did a `SELECT COUNT(*)` (unused) then called `list_api_keys()` and filtered in Python. The COUNT query was dead code.
+
+**Fix**: Removed the unused COUNT query. Function just calls `list_api_keys()` and filters for active keys with admin scope.
+
+### Deviation 4: Response pattern refactored twice
+
+**Plan said**: Use Pydantic `response_model` on routes.
+
+**What happened**: First implemented with `ApiResponse` envelope (`{success, status_code, data}`). User requested status codes in all responses. Then reviewed best practices and refactored to: flat typed responses for success (with proper HTTP codes: 201 create, 204 delete), error envelope with `{detail, status_code}` for errors. This is the standard pattern (Stripe, GitHub).
+
+**Fix**: Removed `ApiResponse` wrapper. Routes return Pydantic models directly. Custom exception handlers add `status_code` to error bodies. Two refactors total — landed on the right pattern.
+
+### Deviation 5: API-first hardening added beyond original plan
+
+**Plan said**: Auth + stub routes + tests.
+
+**What happened**: Architectural review identified gaps for API-first approach. Added in the same phase rather than deferring:
+
+- `/v1/` prefix on all routers (unversioned `/health` and `/settings/providers` stay at root)
+- `X-Request-ID` middleware (generates UUID if not provided, echoes in response)
+- `Content-Type: application/json` enforcement middleware (415 for POST/PUT/PATCH without it)
+- Pagination on list endpoints (`limit`/`offset` query params, `PaginatedResponse` with `items`, `total`, `has_more`)
+- Rate limit headers via slowapi `headers_enabled=True`
+- OpenAPI metadata: `tags_metadata`, Field descriptions/examples on all Pydantic models, route summaries/descriptions
+- CORS: added `X-Request-ID` to `allow_headers` and `expose_headers`
+
+**New files**: `app/middleware.py`, `app/schemas/pagination.py`
+**Modified**: `app/main.py`, `app/routes/auth.py`, `app/routes/graphs.py`, `app/schemas/*.py`, `app/db/crud.py`, `app/db/crud_auth.py` (pagination support), all test files (prefix, pagination, middleware tests)

@@ -34,6 +34,7 @@ line-length = 88
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["B008"]  # Depends() in defaults is standard FastAPI pattern
 
 [tool.ruff.format]
 quote-style = "double"

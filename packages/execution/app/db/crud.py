@@ -18,46 +18,92 @@ def _utcnow_iso() -> str:
 # ── Graphs ──────────────────────────────────────────────────────────────
 
 
-async def create_graph(db: aiosqlite.Connection, name: str, schema_dict: dict) -> Graph:
+async def create_graph(
+    db: aiosqlite.Connection,
+    name: str,
+    schema_dict: dict,
+    owner_id: str,
+) -> Graph:
     graph_id = str(uuid.uuid4())
     now = _utcnow_iso()
     await db.execute(
-        "INSERT INTO graphs (id, name, schema_json, created_at, updated_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (graph_id, name, json.dumps(schema_dict), now, now),
+        "INSERT INTO graphs (id, name, schema_json, owner_id, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (graph_id, name, json.dumps(schema_dict), owner_id, now, now),
     )
     await db.commit()
     return Graph(
         id=graph_id,
         name=name,
         schema_json=schema_dict,
+        owner_id=owner_id,
         created_at=now,
         updated_at=now,
     )
 
 
-async def list_graphs(db: aiosqlite.Connection) -> list[Graph]:
-    cursor = await db.execute(
-        "SELECT id, name, schema_json, created_at, updated_at FROM graphs"
-    )
+async def list_graphs(
+    db: aiosqlite.Connection,
+    owner_id: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[Graph], int]:
+    """Return (graphs, total_count) with pagination.
+
+    ``owner_id=None`` means admin — no filter. Route layer must enforce.
+    """
+    if owner_id is not None:
+        count_cursor = await db.execute(
+            "SELECT COUNT(*) FROM graphs WHERE owner_id = ?",
+            (owner_id,),
+        )
+        cursor = await db.execute(
+            "SELECT id, name, schema_json, owner_id, created_at, updated_at "
+            "FROM graphs WHERE owner_id = ? "
+            "ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (owner_id, limit, offset),
+        )
+    else:
+        count_cursor = await db.execute("SELECT COUNT(*) FROM graphs")
+        cursor = await db.execute(
+            "SELECT id, name, schema_json, owner_id, created_at, updated_at "
+            "FROM graphs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        )
+    total = (await count_cursor.fetchone())[0]
     rows = await cursor.fetchall()
-    return [
+    graphs = [
         Graph(
             id=row[0],
             name=row[1],
             schema_json=json.loads(row[2]),
-            created_at=row[3],
-            updated_at=row[4],
+            owner_id=row[3],
+            created_at=row[4],
+            updated_at=row[5],
         )
         for row in rows
     ]
+    return graphs, total
 
 
-async def get_graph(db: aiosqlite.Connection, graph_id: str) -> Graph | None:
-    cursor = await db.execute(
-        "SELECT id, name, schema_json, created_at, updated_at FROM graphs WHERE id = ?",
-        (graph_id,),
-    )
+async def get_graph(
+    db: aiosqlite.Connection,
+    graph_id: str,
+    owner_id: str | None = None,
+) -> Graph | None:
+    # None = admin, no filter. Route layer must enforce.
+    if owner_id is not None:
+        cursor = await db.execute(
+            "SELECT id, name, schema_json, owner_id, created_at, updated_at "
+            "FROM graphs WHERE id = ? AND owner_id = ?",
+            (graph_id, owner_id),
+        )
+    else:
+        cursor = await db.execute(
+            "SELECT id, name, schema_json, owner_id, created_at, updated_at "
+            "FROM graphs WHERE id = ?",
+            (graph_id,),
+        )
     row = await cursor.fetchone()
     if row is None:
         return None
@@ -65,8 +111,9 @@ async def get_graph(db: aiosqlite.Connection, graph_id: str) -> Graph | None:
         id=row[0],
         name=row[1],
         schema_json=json.loads(row[2]),
-        created_at=row[3],
-        updated_at=row[4],
+        owner_id=row[3],
+        created_at=row[4],
+        updated_at=row[5],
     )
 
 
@@ -75,31 +122,44 @@ async def update_graph(
     graph_id: str,
     name: str,
     schema_dict: dict,
+    owner_id: str | None = None,
 ) -> Graph | None:
+    # None = admin, no filter. Route layer must enforce.
     now = _utcnow_iso()
 
-    # Keep schema_dict in sync with table columns
     schema_dict["name"] = name
     schema_dict.setdefault("metadata", {})["updated_at"] = now
 
-    cursor = await db.execute(
-        "UPDATE graphs SET name = ?, schema_json = ?, updated_at = ? WHERE id = ?",
-        (name, json.dumps(schema_dict), now, graph_id),
-    )
+    if owner_id is not None:
+        cursor = await db.execute(
+            "UPDATE graphs SET name = ?, schema_json = ?, updated_at = ? "
+            "WHERE id = ? AND owner_id = ?",
+            (name, json.dumps(schema_dict), now, graph_id, owner_id),
+        )
+    else:
+        cursor = await db.execute(
+            "UPDATE graphs SET name = ?, schema_json = ?, updated_at = ? WHERE id = ?",
+            (name, json.dumps(schema_dict), now, graph_id),
+        )
     await db.commit()
     if cursor.rowcount == 0:
         return None
-    return Graph(
-        id=graph_id,
-        name=name,
-        schema_json=schema_dict,
-        created_at="",  # caller can re-fetch if needed
-        updated_at=now,
-    )
+    return await get_graph(db, graph_id, owner_id=owner_id)
 
 
-async def delete_graph(db: aiosqlite.Connection, graph_id: str) -> bool:
-    cursor = await db.execute("DELETE FROM graphs WHERE id = ?", (graph_id,))
+async def delete_graph(
+    db: aiosqlite.Connection,
+    graph_id: str,
+    owner_id: str | None = None,
+) -> bool:
+    # None = admin, no filter. Route layer must enforce.
+    if owner_id is not None:
+        cursor = await db.execute(
+            "DELETE FROM graphs WHERE id = ? AND owner_id = ?",
+            (graph_id, owner_id),
+        )
+    else:
+        cursor = await db.execute("DELETE FROM graphs WHERE id = ?", (graph_id,))
     await db.commit()
     return cursor.rowcount > 0
 
@@ -115,7 +175,6 @@ _UPDATABLE_RUN_FIELDS = {
     "paused_prompt",
 }
 
-# Map model field names to DB column names where they differ
 _RUN_COLUMN_MAP = {
     "final_state": "final_state_json",
 }
@@ -124,47 +183,63 @@ _RUN_COLUMN_MAP = {
 async def create_run(
     db: aiosqlite.Connection,
     graph_id: str,
+    owner_id: str,
     status: str,
     input_data: dict,
 ) -> Run:
     run_id = str(uuid.uuid4())
     now = _utcnow_iso()
     await db.execute(
-        "INSERT INTO runs (id, graph_id, status, input_json, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (run_id, graph_id, status, json.dumps(input_data), now),
+        "INSERT INTO runs (id, graph_id, owner_id, status, input_json, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (run_id, graph_id, owner_id, status, json.dumps(input_data), now),
     )
     await db.commit()
     return Run(
         id=run_id,
         graph_id=graph_id,
+        owner_id=owner_id,
         status=status,
         input=input_data,
         created_at=now,
     )
 
 
-async def get_run(db: aiosqlite.Connection, run_id: str) -> Run | None:
-    cursor = await db.execute(
-        "SELECT id, graph_id, status, input_json, final_state_json, "
-        "duration_ms, created_at, error, paused_node_id, paused_prompt "
-        "FROM runs WHERE id = ?",
-        (run_id,),
-    )
+async def get_run(
+    db: aiosqlite.Connection,
+    run_id: str,
+    owner_id: str | None = None,
+) -> Run | None:
+    # None = admin, no filter. Route layer must enforce.
+    if owner_id is not None:
+        cursor = await db.execute(
+            "SELECT id, graph_id, owner_id, status, input_json, final_state_json, "
+            "duration_ms, created_at, error, paused_node_id, paused_prompt "
+            "FROM runs WHERE id = ? AND owner_id = ?",
+            (run_id, owner_id),
+        )
+    else:
+        cursor = await db.execute(
+            "SELECT id, graph_id, owner_id, status, input_json, final_state_json, "
+            "duration_ms, created_at, error, paused_node_id, paused_prompt "
+            "FROM runs WHERE id = ?",
+            (run_id,),
+        )
     row = await cursor.fetchone()
     if row is None:
         return None
     return Run(
         id=row[0],
         graph_id=row[1],
-        status=row[2],
-        input=json.loads(row[3]) if row[3] else {},
-        final_state=json.loads(row[4]) if row[4] else None,
-        duration_ms=row[5],
-        created_at=row[6],
-        error=row[7],
-        paused_node_id=row[8],
-        paused_prompt=row[9],
+        owner_id=row[2],
+        status=row[3],
+        input=json.loads(row[4]) if row[4] else {},
+        final_state=json.loads(row[5]) if row[5] else None,
+        duration_ms=row[6],
+        created_at=row[7],
+        error=row[8],
+        paused_node_id=row[9],
+        paused_prompt=row[10],
     )
 
 
@@ -196,27 +271,41 @@ async def update_run(
 
 
 async def list_runs_by_graph(
-    db: aiosqlite.Connection, graph_id: str, limit: int = 10
+    db: aiosqlite.Connection,
+    graph_id: str,
+    owner_id: str | None = None,
+    limit: int = 10,
 ) -> list[Run]:
-    cursor = await db.execute(
-        "SELECT id, graph_id, status, input_json, final_state_json, "
-        "duration_ms, created_at, error, paused_node_id, paused_prompt "
-        "FROM runs WHERE graph_id = ? ORDER BY created_at DESC LIMIT ?",
-        (graph_id, limit),
-    )
+    # None = admin, no filter. Route layer must enforce.
+    if owner_id is not None:
+        cursor = await db.execute(
+            "SELECT id, graph_id, owner_id, status, input_json, final_state_json, "
+            "duration_ms, created_at, error, paused_node_id, paused_prompt "
+            "FROM runs WHERE graph_id = ? AND owner_id = ? "
+            "ORDER BY created_at DESC LIMIT ?",
+            (graph_id, owner_id, limit),
+        )
+    else:
+        cursor = await db.execute(
+            "SELECT id, graph_id, owner_id, status, input_json, final_state_json, "
+            "duration_ms, created_at, error, paused_node_id, paused_prompt "
+            "FROM runs WHERE graph_id = ? ORDER BY created_at DESC LIMIT ?",
+            (graph_id, limit),
+        )
     rows = await cursor.fetchall()
     return [
         Run(
             id=row[0],
             graph_id=row[1],
-            status=row[2],
-            input=json.loads(row[3]) if row[3] else {},
-            final_state=json.loads(row[4]) if row[4] else None,
-            duration_ms=row[5],
-            created_at=row[6],
-            error=row[7],
-            paused_node_id=row[8],
-            paused_prompt=row[9],
+            owner_id=row[2],
+            status=row[3],
+            input=json.loads(row[4]) if row[4] else {},
+            final_state=json.loads(row[5]) if row[5] else None,
+            duration_ms=row[6],
+            created_at=row[7],
+            error=row[8],
+            paused_node_id=row[9],
+            paused_prompt=row[10],
         )
         for row in rows
     ]
