@@ -6,6 +6,17 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class Graph:
+    """A saved graph with its full GraphSchema."""
+
+    id: str
+    name: str
+    schema_json: dict = field(default_factory=dict)
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass
 class Run:
     """A single graph execution run."""
 

@@ -2,31 +2,18 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from app.tools.base import BaseTool, ToolNotFoundError
+from app.tools.calculator import CalculatorTool
+from app.tools.datetime_tool import DatetimeTool
+from app.tools.url_fetch import UrlFetchTool
 
+__all__ = ["BaseTool", "ToolNotFoundError", "REGISTRY", "get_tool"]
 
-class BaseTool(ABC):
-    """Base interface for all GraphWeave tools."""
-
-    name: str
-    description: str
-
-    @abstractmethod
-    def run(self, inputs: dict) -> dict:
-        """Execute the tool.
-
-        Returns:
-            Response envelope: { success, result/error, recoverable }.
-        """
-        ...
-
-
-class ToolNotFoundError(Exception):
-    """Raised when a tool name is not in the registry."""
-
-
-# Registry will be populated as tools are implemented
-REGISTRY: dict[str, BaseTool] = {}
+REGISTRY: dict[str, BaseTool] = {
+    "calculator": CalculatorTool(),
+    "datetime": DatetimeTool(),
+    "url_fetch": UrlFetchTool(),
+}
 
 
 def get_tool(name: str) -> BaseTool:
