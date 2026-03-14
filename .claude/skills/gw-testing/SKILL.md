@@ -48,11 +48,15 @@ result = await graph.ainvoke({"messages": [HumanMessage(content="test")]})
 ```
 packages/execution/
 ├── tests/
+│   ├── conftest.py              # shared fixtures: db, create_test_key
 │   ├── unit/
-│   │   ├── test_builder.py      # GraphSchema → StateGraph (MockLLM)
-│   │   ├── test_executor.py     # SSE event generation (MockLLM)
-│   │   ├── test_exporter.py     # code gen + compile validation
-│   │   ├── test_migrations.py   # migration runner
+│   │   ├── test_auth_keys.py    # key generation, hashing, prefix
+│   │   ├── test_auth_deps.py    # require_auth, require_scope (401/403)
+│   │   ├── test_crud.py         # graph/run CRUD + owner isolation
+│   │   ├── test_crud_auth.py    # api_keys CRUD + count admin keys
+│   │   ├── test_migrations.py   # migration runner, schema v2
+│   │   ├── test_routes.py       # integration: auth, CRUD, pagination, middleware
+│   │   ├── test_state_utils.py  # input_map resolution
 │   │   └── test_tools/          # each tool in isolation (no network)
 │   └── integration/             # real API calls — NOT in CI
 │       ├── test_openai.py
@@ -110,38 +114,52 @@ class MockEventSource {
 global.EventSource = MockEventSource as any
 ```
 
+## Auth testing patterns
+
+```python
+# tests/conftest.py — shared fixtures
+@pytest.fixture
+async def db(tmp_path):
+    db_path = str(tmp_path / "test.db")
+    run_migrations(db_path)
+    conn = await aiosqlite.connect(db_path)
+    conn.row_factory = aiosqlite.Row
+    yield conn
+    await conn.close()
+
+async def create_test_key(db, scopes=None, name="test-key"):
+    # Creates key in DB, returns (ApiKey, raw_key)
+
+# Route integration tests use httpx.AsyncClient + ASGITransport
+# ⚠ Does NOT run lifespan — must set app.state.db manually
+@pytest.fixture
+async def client(tmp_path):
+    db = ...  # setup DB
+    app.state.db = db
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+```
+
 ## Tool testing — no network
 
 ```python
-# Each tool tested with mocked external calls
+from unittest.mock import patch, MagicMock
 
-from unittest.mock import patch
-
-def test_web_search_tavily():
-    with patch("app.tools.web_search.TavilyClient") as mock:
-        mock.return_value.search.return_value = { "results": [...] }
-        tool = WebSearchTool()
-        result = tool.run({ "query": "test" })
-        assert result["success"] is True
-        assert result["source"] == "tavily"
-
-def test_web_search_fallback_to_ddg():
-    # When TAVILY_API_KEY is not set
-    with patch.dict(os.environ, {}, clear=True):
-        tool = WebSearchTool()
-        result = tool.run({ "query": "test" })
-        assert result["source"] == "duckduckgo"
+def test_url_fetch_ssrf_blocked():
+    with patch("app.tools.url_fetch.socket.getaddrinfo") as mock:
+        mock.return_value = [(None, None, None, None, ("127.0.0.1", 0))]
+        error = validate_url("http://localhost/secret")
+    assert "blocked" in error.lower()
 ```
 
 ## Migration testing
 
 ```python
-def test_migration_rollback_on_failure():
-    db = create_test_db()
-    # Inject a broken migration
-    broken = Migration(version=99, up=lambda db: db.execute("INVALID SQL"))
-    with pytest.raises(MigrationError):
-        run_migrations(db, migrations=[broken])
-    # Database should be unchanged
-    assert get_schema_version(db) < 99
+def test_bad_migration_rolls_back(db_path, monkeypatch):
+    run_migrations(db_path)  # apply v1+v2
+    # Inject a broken v3 migration via monkeypatch
+    with pytest.raises(MigrationError, match="Migration 003 failed"):
+        run_migrations(db_path)
+    # Version should still be 2
 ```

@@ -1,13 +1,13 @@
 ---
 name: gw-execution
-description: "FastAPI routes, LangGraph builder (GraphSchema to StateGraph), SSE streaming, tool registry pattern, human-in-the-loop resume server logic, graph validation endpoint, run history storage, export/code generation, and migration runner. Load when working on FastAPI routes, LangGraph builder, SSE streaming, tool registry, validation, run history, export generation, or migrations."
+description: "FastAPI routes, API key auth, scoped permissions, LangGraph builder (GraphSchema to StateGraph), SSE streaming, tool registry pattern, human-in-the-loop resume server logic, graph validation endpoint, run history storage, export/code generation, and migration runner. Load when working on FastAPI routes, auth, API keys, LangGraph builder, SSE streaming, tool registry, validation, run history, export generation, or migrations."
 disable-model-invocation: true
 ---
 
 # Skill: Execution
 
-Load this when: working on FastAPI routes, LangGraph builder, SSE streaming,
-tool registry, export generation, or migrations.
+Load this when: working on FastAPI routes, auth, API keys, LangGraph builder,
+SSE streaming, tool registry, export generation, or migrations.
 Also load schema.md — the execution layer consumes GraphSchema.
 
 ---
@@ -17,227 +17,170 @@ Also load schema.md — the execution layer consumes GraphSchema.
 ```
 packages/execution/
 ├── app/
-│   ├── main.py          # FastAPI app, CORS, rate limiting, startup validation
-│   ├── builder.py       # GraphSchema → LangGraph StateGraph
-│   ├── executor.py      # run management, SSE streaming, reconnection
-│   ├── exporter.py      # Python code generation + compile validation
-│   ├── logging.py       # structured JSON logging config
-│   ├── tools/           # built-in tool registry
-│   │   ├── registry.py  # tool lookup by name
-│   │   ├── web_search.py
-│   │   ├── url_fetch.py
-│   │   ├── wikipedia.py
-│   │   ├── file_read.py
-│   │   ├── file_write.py
+│   ├── main.py          # FastAPI app, CORS, middleware, exception handlers
+│   ├── middleware.py     # RequestID + ContentType middleware
+│   ├── cli.py           # CLI for API key management (create-key, list-keys, revoke-key)
+│   ├── builder.py       # GraphSchema → LangGraph StateGraph (stub)
+│   ├── executor.py      # run management, SSE streaming (stub)
+│   ├── exporter.py      # Python code generation (stub)
+│   ├── logging.py       # structured JSON logging with request_id
+│   ├── state_utils.py   # resolve_input_map via simpleeval
+│   ├── auth/
+│   │   ├── __init__.py  # scope constants (SCOPES_DEFAULT, SCOPES_ADMIN, ALL_SCOPES)
+│   │   ├── keys.py      # key generation (gw_ prefix), SHA-256 hashing
+│   │   └── deps.py      # FastAPI deps: APIKeyHeader, require_auth, require_scope
+│   ├── routes/
+│   │   ├── auth.py      # POST/GET/DELETE /v1/auth/keys (admin only)
+│   │   └── graphs.py    # CRUD /v1/graphs with scope + owner isolation
+│   ├── schemas/
+│   │   ├── common.py    # ErrorResponse
+│   │   ├── auth.py      # CreateKeyRequest/Response, KeyInfo
+│   │   ├── graphs.py    # Create/UpdateGraphRequest, GraphResponse
+│   │   └── pagination.py # PaginatedResponse
+│   ├── tools/
+│   │   ├── base.py      # BaseTool ABC + ToolNotFoundError
+│   │   ├── registry.py  # REGISTRY dict, get_tool()
 │   │   ├── calculator.py
 │   │   ├── datetime_tool.py
-│   │   └── weather.py
+│   │   └── url_fetch.py # SSRF guard, no redirects
 │   └── db/
-│       ├── models.py
+│       ├── connection.py # init_db, close_db, get_db (FastAPI Depends)
+│       ├── models.py     # ApiKey, Graph, Run dataclasses
+│       ├── crud.py       # async CRUD for graphs/runs with owner_id filtering
+│       ├── crud_auth.py  # async CRUD for api_keys
 │       └── migrations/
-│           ├── 001_initial.py
-│           └── 002_add_run_history.py
+│           ├── runner.py      # migration discovery + execution
+│           ├── 001_initial.py # graphs, runs, schema_version tables
+│           └── 002_auth.py    # api_keys table, owner_id on graphs/runs
+├── tests/
+│   ├── conftest.py       # shared db fixture, create_test_key helper
+│   └── unit/             # 89 tests
 ├── .env.example
-├── pyproject.toml       # uv manages deps — never edit manually without uv add
-└── uv.lock              # committed — uv sync --frozen in CI + Docker
+├── pyproject.toml
+└── uv.lock
 ```
 
-## API routes
+## Authentication
 
-```
-POST   /graphs                     create graph
-GET    /graphs                     list graphs
-GET    /graphs/{id}                get graph
-PUT    /graphs/{id}                update graph
-DELETE /graphs/{id}                delete graph
-
-POST   /graphs/{id}/run            start run → { run_id }
-GET    /graphs/run/{id}/stream     SSE stream
-GET    /graphs/run/{id}/status     reconnection recovery endpoint
-POST   /graphs/run/{id}/resume     human-in-the-loop resume
-POST   /graphs/{id}/validate       client-side pre-run validation
-GET    /graphs/{id}/export         generate Python + requirements.txt
-
-GET    /settings/providers         provider status — never returns key values
-```
-
-## builder.py — GraphSchema → StateGraph
+API keys via `X-API-Key` header (using `fastapi.security.APIKeyHeader`).
+Key = identity. `owner_id` = `api_key.id`.
 
 ```python
-def build_graph(schema: GraphSchema, llm_provider: str) -> CompiledGraph:
-    # 1. Build TypedDict state class from schema.state
-    # 2. Create StateGraph(State)
-    # 3. Add nodes by type (llm, tool, condition, human_input)
-    # 4. Add edges (unconditional + conditional)
-    # 5. Set entry point from Start node
-    # 6. compile() with checkpointer for human-in-the-loop
+# Scopes
+SCOPES_DEFAULT = ["graphs:read", "graphs:write", "runs:read", "runs:write"]
+SCOPES_ADMIN = [*SCOPES_DEFAULT, "admin"]
 
-    # Compile-only validation (no invocation):
-    try:
-        compiled = graph.compile(checkpointer=MemorySaver())
-        return compiled
-    except Exception as e:
-        raise GraphBuildError(f"Graph compilation failed: {e}",
-                              node_ref=extract_node_ref(e))
+# Dependencies (app/auth/deps.py)
+api_key_header = APIKeyHeader(name="X-API-Key")
+
+async def require_auth(raw_key, db) -> AuthContext
+    # hash → lookup → 401 if invalid/revoked
+
+def require_scope(scope: str)
+    # returns dependency: 403 if scope missing
+
+require_admin = require_scope("admin")
 ```
 
-## executor.py — SSE streaming
+Bootstrap: `uv run python -m app.cli create-key --name admin --scopes all`
+
+Future: `Authorization: Bearer <firebase-jwt>` for browser auth (separate header, no collision).
+
+## API routes (implemented)
+
+All authenticated routes use `/v1/` prefix. System endpoints are unversioned.
+
+```
+# System (unversioned, open)
+GET    /health                      status + llm/auth configured
+GET    /settings/providers          provider config (no key values)
+
+# Auth (admin scope required)
+POST   /v1/auth/keys               create key → 201 + raw key (shown once)
+GET    /v1/auth/keys               list keys (paginated, key_hash excluded)
+DELETE /v1/auth/keys/{id}          revoke key (409 if last admin)
+
+# Graphs (scoped)
+POST   /v1/graphs                  create graph → 201
+GET    /v1/graphs                  list own graphs (paginated, admin: all)
+GET    /v1/graphs/{id}             get graph (404 if not owner)
+PUT    /v1/graphs/{id}             update graph
+DELETE /v1/graphs/{id}             delete graph → 204
+```
+
+## API routes (planned — not yet implemented)
+
+```
+POST   /v1/graphs/{id}/run         start run → { run_id }
+GET    /v1/graphs/run/{id}/stream  SSE stream
+GET    /v1/graphs/run/{id}/status  reconnection recovery
+POST   /v1/graphs/run/{id}/resume  human-in-the-loop resume
+POST   /v1/graphs/{id}/validate    pre-run validation
+GET    /v1/graphs/{id}/export      generate Python + requirements.txt
+```
+
+## Response patterns
 
 ```python
-async def stream_run(run_id: str, graph: CompiledGraph,
-                     input: dict) -> AsyncGenerator[str, None]:
-    async for event in graph.astream(input, config={"run_id": run_id}):
-        node_id = list(event.keys())[0]
-        yield format_sse("node_completed", {
-            "node_id": node_id,
-            "output": event[node_id],
-            "state_snapshot": get_state_snapshot(graph, run_id),
-            "duration_ms": ...,
-        })
-    yield format_sse("graph_completed", { "final_state": ... })
+# Success — flat, typed, proper HTTP codes
+# POST → 201, GET/PUT → 200, DELETE → 204 (empty body)
+{"id": "...", "name": "My Graph", "owner_id": "...", ...}
 
-def format_sse(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+# List — paginated
+{"items": [...], "total": 42, "limit": 20, "offset": 0, "has_more": true}
+
+# Error — envelope with status_code
+{"detail": "Graph not found", "status_code": 404}
+{"detail": [...validation errors...], "status_code": 422}
 ```
 
-## /status endpoint — reconnection recovery
+## Middleware
 
-```python
-@app.get("/graphs/run/{run_id}/status")
-async def get_run_status(run_id: str):
-    run = db.get_run(run_id)
-    return {
-        "status": run.status,          # running | completed | paused | error
-        "final_state": run.final_state if run.status == "completed" else None,
-        "paused_node_id": run.paused_node_id if run.status == "paused" else None,
-        "paused_prompt": run.paused_prompt if run.status == "paused" else None,
-    }
-```
+- **RequestIDMiddleware**: reads `X-Request-ID`, generates UUID if missing, echoes in response
+- **ContentTypeMiddleware**: rejects POST/PUT/PATCH without `Content-Type: application/json` → 415
+- **CORS**: explicit origins, `allow_headers=["Content-Type", "X-API-Key", "X-Request-ID"]`
+- **Rate limiting**: slowapi, 60/min default, `headers_enabled=True` (X-RateLimit-* headers)
 
 ## Tool registry pattern
 
 ```python
-# Every tool must conform to this interface
-class BaseTool:
+# app/tools/base.py — BaseTool is sync. Executor wraps in asyncio.to_thread().
+class BaseTool(ABC):
     name: str
     description: str
-
     def run(self, inputs: dict) -> dict:
-        # Always return the response envelope:
-        # { "success": True/False, "result": ..., "source": ...,
-        #   "truncated": False, "recoverable": True/False }
-        raise NotImplementedError
+        # { "success": True/False, "result"/"error", "recoverable": bool }
 
-# registry.py
+# app/tools/registry.py
 REGISTRY: dict[str, BaseTool] = {
-    "web_search":    WebSearchTool(),
-    "url_fetch":     UrlFetchTool(),
-    "wikipedia":     WikipediaTool(),
-    "file_read":     FileReadTool(),
-    "file_write":    FileWriteTool(),
-    "calculator":    CalculatorTool(),
-    "datetime":      DatetimeTool(),
-    "weather":       WeatherTool(),
+    "calculator":    CalculatorTool(),   # simpleeval, MAX_POWER=1000
+    "datetime":      DatetimeTool(),     # fromisoformat only
+    "url_fetch":     UrlFetchTool(),     # SSRF guard, follow_redirects=False
 }
-
-def get_tool(name: str) -> BaseTool:
-    if name not in REGISTRY:
-        raise ToolNotFoundError(f"Unknown tool: {name}")
-    return REGISTRY[name]
 ```
 
-## Human-in-the-loop resume (server side)
+## Database
+
+SQLite via aiosqlite. WAL mode. Migrations run on startup in transactions.
 
 ```python
-@app.post("/graphs/run/{run_id}/resume")
-async def resume_run(run_id: str, body: ResumeBody):
-    # Mark as resume_pending — do NOT continue execution yet
-    db.update_run_status(run_id, "resume_pending", input=body.input)
-    return { "success": True, "run_id": run_id }
+# Models (app/db/models.py)
+ApiKey: id, name, key_hash, key_prefix, scopes, status, created_at, revoked_at
+Graph:  id, name, schema_json, owner_id, created_at, updated_at
+Run:    id, graph_id, owner_id, status, input, final_state, duration_ms, ...
 
-# executor.py — detects SSE connection then continues
-async def wait_for_sse_then_resume(run_id: str):
-    deadline = time.time() + 2.0   # 2-second timeout
-    while time.time() < deadline:
-        if sse_connections.get(run_id):
-            break
-        await asyncio.sleep(0.1)
-    # Continue regardless — events stored in run history either way
-    await continue_execution(run_id)
+# CRUD conventions
+# owner_id: str | None = None → None means admin (no filter)
+# get/update → X | None (never raises for not-found)
+# delete → bool
+# list → (list[X], total) for pagination
 ```
 
-## Graph validation endpoint
+## CLI
 
-```python
-@app.post("/graphs/{id}/validate")
-async def validate_graph(id: str):
-    schema = db.get_graph(id)
-    errors = []
-
-    # Structural checks
-    if not has_start_node(schema):
-        errors.append({"type": "missing_start", "message": "Graph must have a Start node"})
-    if not has_end_node(schema):
-        errors.append({"type": "missing_end", "message": "Graph must have an End node"})
-    if orphans := find_orphan_nodes(schema):
-        errors.append({"type": "orphan_nodes", "node_ids": orphans,
-                        "message": "Disconnected nodes found"})
-
-    # Compilation check — catches edge reference errors, invalid conditions
-    if not errors:
-        try:
-            build_graph(schema, provider="openai")  # no API call, compile only
-        except GraphBuildError as e:
-            errors.append({"type": "build_error", "node_id": e.node_ref,
-                            "message": str(e)})
-
-    return {"valid": len(errors) == 0, "errors": errors}
-```
-
-Client-side validation catches obvious issues fast. This endpoint catches
-structural compilation errors that only `build_graph()` can detect.
-
-## Run history
-
-Last 10 runs per graph, stored in SQLite. Accessed via the run history tab
-in the run panel.
-
-```python
-# db/models.py
-class Run:
-    id: str              # uuid
-    graph_id: str
-    status: str          # running | completed | paused | error
-    input: dict
-    final_state: dict | None
-    duration_ms: int | None
-    created_at: str      # ISO 8601
-    error: str | None
-    paused_node_id: str | None
-    paused_prompt: str | None
-
-@app.get("/graphs/{id}/runs")
-async def list_runs(id: str, limit: int = 10):
-    return db.get_runs_by_graph(id, limit=limit)
-    # Returns: [{ id, status, input, final_state, duration_ms, created_at }]
-```
-
-Run events are stored as the run progresses so that reconnection and
-history replay can reconstruct the full trace.
-
-## Export quality
-
-```python
-# exporter.py — two-layer validation before generating files
-
-# Layer 1 (v1): compile-only — no invocation
-def validate_export(schema: GraphSchema) -> ValidationResult:
-    try:
-        graph = build_graph(schema, provider="openai")  # no API call
-        return ValidationResult(valid=True)
-    except GraphBuildError as e:
-        return ValidationResult(valid=False, error=str(e), node_ref=e.node_ref)
-
-# Layer 2 (v1.1): dry-run with synthetic input (opt-in)
-# Generated code annotates every user action with # TODO comments
+```bash
+uv run python -m app.cli create-key --name admin --scopes all
+uv run python -m app.cli create-key --name CI --scopes graphs:read,graphs:write
+uv run python -m app.cli list-keys
+uv run python -m app.cli revoke-key KEY_ID
 ```
