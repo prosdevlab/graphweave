@@ -3,12 +3,7 @@ name: plan-reviewer
 description: "Reviews execution plans before implementation. Use PROACTIVELY after writing or updating a plan in .claude/gw-plans/, or when the user asks for a plan review."
 tools: Read, Grep, Glob, Bash
 model: opus
-skills:
-  - gw-execution
-  - gw-schema
-  - gw-error-handling
-  - gw-security
-  - gw-testing
+color: cyan
 ---
 
 ## Purpose

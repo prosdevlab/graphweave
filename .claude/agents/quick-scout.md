@@ -3,6 +3,7 @@ name: quick-scout
 description: "Fast codebase explorer. Use for finding code, understanding patterns, tracing data flows, and answering 'where is X?' questions."
 tools: Read, Grep, Glob
 model: haiku
+color: blue
 ---
 
 ## Purpose
