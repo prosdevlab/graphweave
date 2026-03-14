@@ -5,17 +5,20 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
+from langchain_core.language_models import FakeListChatModel
 from langgraph.checkpoint.memory import InMemorySaver
 
 from app.auth.deps import AuthContext, require_scope
-from app.builder import GraphBuildError, build_graph
+from app.builder import GraphBuildError, build_graph, validate_schema
 from app.db import crud
 from app.db.connection import get_db
 from app.schemas.graphs import (
     CreateGraphRequest,
     GraphResponse,
+    SchemaValidationError,
     UpdateGraphRequest,
+    ValidateResponse,
 )
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.runs import StartRunRequest, StartRunResponse
@@ -151,6 +154,95 @@ async def delete_graph(
     if not deleted:
         raise HTTPException(status_code=404, detail="Graph not found")
     return Response(status_code=204)
+
+
+# ── Validate / Export ──────────────────────────────────────────────────
+
+
+@router.post(
+    "/{graph_id}/validate",
+    response_model=ValidateResponse,
+    summary="Validate graph schema",
+    responses={
+        404: {"description": "Graph not found"},
+        422: {"description": "Schema is invalid"},
+    },
+)
+async def validate_graph(
+    graph_id: str,
+    auth: AuthContext = Depends(require_scope("graphs:read")),
+    db=Depends(get_db),
+) -> ValidateResponse | JSONResponse:
+    """Validate a graph's schema without executing it."""
+    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    if graph is None:
+        raise HTTPException(status_code=404, detail="Graph not found")
+
+    try:
+        validate_schema(graph.schema_json)
+    except GraphBuildError as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ValidateResponse(
+                valid=False,
+                errors=[
+                    SchemaValidationError(
+                        message=str(exc),
+                        node_ref=getattr(exc, "node_ref", None),
+                    )
+                ],
+            ).model_dump(),
+        )
+
+    try:
+        mock = FakeListChatModel(responses=[""])
+        build_graph(graph.schema_json, llm_override=mock)
+    except GraphBuildError as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ValidateResponse(
+                valid=False,
+                errors=[
+                    SchemaValidationError(
+                        message=str(exc),
+                        node_ref=getattr(exc, "node_ref", None),
+                    )
+                ],
+            ).model_dump(),
+        )
+    except Exception as exc:
+        return JSONResponse(
+            status_code=422,
+            content=ValidateResponse(
+                valid=False,
+                errors=[SchemaValidationError(message=str(exc))],
+            ).model_dump(),
+        )
+
+    return ValidateResponse(valid=True, errors=[])
+
+
+@router.get(
+    "/{graph_id}/export",
+    summary="Export graph as Python code",
+    responses={
+        404: {"description": "Graph not found"},
+        501: {"description": "Not implemented"},
+    },
+)
+async def export_graph(
+    graph_id: str,
+    auth: AuthContext = Depends(require_scope("graphs:read")),
+    db=Depends(get_db),
+) -> None:
+    """Export graph as standalone Python code (not yet implemented)."""
+    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    if graph is None:
+        raise HTTPException(status_code=404, detail="Graph not found")
+    raise HTTPException(
+        status_code=501,
+        detail="Export not implemented. Coming in a future release.",
+    )
 
 
 # ── Run ────────────────────────────────────────────────────────────────
