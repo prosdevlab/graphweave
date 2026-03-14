@@ -11,6 +11,7 @@ from langchain_core.language_models import FakeListChatModel
 from langgraph.graph.message import add_messages
 
 from app.builder import (
+    BuildResult,
     GraphBuildError,
     _build_defaults,
     _create_node_function,
@@ -24,6 +25,7 @@ from app.builder import (
     _router_field_exists,
     _router_iteration_limit,
     _router_tool_error,
+    build_graph,
     build_state_type,
     validate_schema,
 )
@@ -620,3 +622,419 @@ class TestMakeRouter:
         }
         with pytest.raises(GraphBuildError, match="Unknown condition type"):
             _make_router("cond_1", config, {})
+
+
+# ---------------------------------------------------------------------------
+# Integration tests — build_graph end-to-end
+# ---------------------------------------------------------------------------
+
+
+class TestBuildGraphIntegration:
+    def _linear_schema(self):
+        """start → llm → end"""
+        return {
+            "id": "linear",
+            "name": "Linear",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "llm_1",
+                    "type": "llm",
+                    "label": "LLM",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "You are helpful.",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"question": "messages[-1].content"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 200},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "llm_1"},
+                {"id": "e2", "source": "llm_1", "target": "e"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+
+    async def test_linear_graph(self):
+        """start → llm → end: compiles and invokes successfully."""
+        schema = self._linear_schema()
+        mock = FakeListChatModel(responses=["42"])
+        result = build_graph(schema, llm_override=mock)
+
+        assert isinstance(result, BuildResult)
+        state = await result.graph.ainvoke(
+            {**result.defaults, "messages": [("human", "meaning of life?")]}
+        )
+        assert state["result"] == "42"
+
+    async def test_branching_graph(self):
+        """start → cond(field_equals) → branch_a or branch_b → end."""
+        mock = FakeListChatModel(responses=["branch A answer"])
+        schema = {
+            "id": "branch",
+            "name": "Branch",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+                {"key": "choice", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "cond_1",
+                    "type": "condition",
+                    "label": "Check",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "condition": {
+                            "type": "field_equals",
+                            "field": "choice",
+                            "value": "a",
+                            "branch": "go_a",
+                        },
+                        "branches": {"go_a": "llm_a", "go_b": "llm_b"},
+                        "default_branch": "go_b",
+                    },
+                },
+                {
+                    "id": "llm_a",
+                    "type": "llm",
+                    "label": "LLM A",
+                    "position": {"x": -100, "y": 200},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"q": "choice"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "llm_b",
+                    "type": "llm",
+                    "label": "LLM B",
+                    "position": {"x": 100, "y": 200},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"q": "choice"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 300},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "cond_1"},
+                {
+                    "id": "e2",
+                    "source": "cond_1",
+                    "target": "llm_a",
+                    "condition_branch": "go_a",
+                },
+                {
+                    "id": "e3",
+                    "source": "cond_1",
+                    "target": "llm_b",
+                    "condition_branch": "go_b",
+                },
+                {"id": "e4", "source": "llm_a", "target": "e"},
+                {"id": "e5", "source": "llm_b", "target": "e"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+        result = build_graph(schema, llm_override=mock)
+        state = await result.graph.ainvoke({**result.defaults, "choice": "a"})
+        assert state["result"] == "branch A answer"
+
+    async def test_iteration_limit_stops(self):
+        """Verify iteration_limit exits when count >= max."""
+        schema = {
+            "id": "loop",
+            "name": "Loop",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "count", "type": "number", "reducer": "replace"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+                {
+                    "key": "calc_out",
+                    "type": "object",
+                    "reducer": "replace",
+                },
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "calc",
+                    "type": "tool",
+                    "label": "Calc",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "tool_name": "calculator",
+                        "input_map": {"expression": "messages[-1].content"},
+                        "output_key": "calc_out",
+                    },
+                },
+                {
+                    "id": "cond_1",
+                    "type": "condition",
+                    "label": "Check Count",
+                    "position": {"x": 0, "y": 200},
+                    "config": {
+                        "condition": {
+                            "type": "iteration_limit",
+                            "field": "count",
+                            "max": 2,
+                            "exceeded": "stop",
+                            "continue": "loop",
+                        },
+                        "branches": {"stop": "e", "loop": "calc"},
+                        "default_branch": "stop",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 300},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "calc"},
+                {"id": "e2", "source": "calc", "target": "cond_1"},
+                {
+                    "id": "e3",
+                    "source": "cond_1",
+                    "target": "e",
+                    "condition_branch": "stop",
+                },
+                {
+                    "id": "e4",
+                    "source": "cond_1",
+                    "target": "calc",
+                    "condition_branch": "loop",
+                },
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+        result = build_graph(schema)
+        # count=5 >= max=2, so the "stop" branch is taken immediately
+        state = await result.graph.ainvoke(
+            {**result.defaults, "count": 5, "messages": [("human", "1+1")]}
+        )
+        # Graph should reach END without looping
+        assert state["count"] == 5
+
+    async def test_multiple_end_nodes(self):
+        """Graph with 2 end nodes routes correctly via condition."""
+        mock = FakeListChatModel(responses=["end1 answer"])
+        schema = {
+            "id": "multi-end",
+            "name": "MultiEnd",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+                {"key": "path", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "cond_1",
+                    "type": "condition",
+                    "label": "Route",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "condition": {
+                            "type": "field_equals",
+                            "field": "path",
+                            "value": "fast",
+                            "branch": "go_fast",
+                        },
+                        "branches": {
+                            "go_fast": "e1",
+                            "go_slow": "llm_1",
+                        },
+                        "default_branch": "go_slow",
+                    },
+                },
+                {
+                    "id": "llm_1",
+                    "type": "llm",
+                    "label": "LLM",
+                    "position": {"x": 100, "y": 200},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"q": "path"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e1",
+                    "type": "end",
+                    "label": "End Fast",
+                    "position": {"x": -100, "y": 300},
+                    "config": {},
+                },
+                {
+                    "id": "e2",
+                    "type": "end",
+                    "label": "End Slow",
+                    "position": {"x": 100, "y": 300},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "cond_1"},
+                {
+                    "id": "e2",
+                    "source": "cond_1",
+                    "target": "e1",
+                    "condition_branch": "go_fast",
+                },
+                {
+                    "id": "e3",
+                    "source": "cond_1",
+                    "target": "llm_1",
+                    "condition_branch": "go_slow",
+                },
+                {"id": "e4", "source": "llm_1", "target": "e2"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+        result = build_graph(schema, llm_override=mock)
+        # Take the "fast" path — goes directly to END
+        state = await result.graph.ainvoke({**result.defaults, "path": "fast"})
+        # Result should still be default (no LLM ran)
+        assert state["result"] == ""
+
+    async def test_defaults_applied_at_invocation(self):
+        """Verify state initialized from BuildResult.defaults."""
+        schema = {
+            "id": "defaults",
+            "name": "Defaults",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {
+                    "key": "result",
+                    "type": "string",
+                    "reducer": "replace",
+                    "default": "initial",
+                },
+                {
+                    "key": "count",
+                    "type": "number",
+                    "reducer": "replace",
+                    "default": 99,
+                },
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 100},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "e"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+        result = build_graph(schema)
+        assert result.defaults["result"] == "initial"
+        assert result.defaults["count"] == 99
+
+        state = await result.graph.ainvoke(result.defaults)
+        assert state["result"] == "initial"
+        assert state["count"] == 99
+
+    def test_build_result_is_named_tuple(self):
+        schema = self._linear_schema()
+        mock = FakeListChatModel(responses=["ok"])
+        result = build_graph(schema, llm_override=mock)
+        assert isinstance(result, BuildResult)
+        assert hasattr(result, "graph")
+        assert hasattr(result, "defaults")

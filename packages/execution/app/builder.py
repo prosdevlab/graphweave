@@ -8,6 +8,7 @@ from collections import deque
 from typing import Annotated, NamedTuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import interrupt
@@ -483,7 +484,7 @@ def _make_router(
 
 
 # ---------------------------------------------------------------------------
-# build_graph — placeholder until Commit 6 wires everything together
+# build_graph — main entry point
 # ---------------------------------------------------------------------------
 
 
@@ -503,5 +504,62 @@ def build_graph(
     Raises:
         GraphBuildError: If the graph cannot be compiled.
     """
-    # TODO: Full orchestration in Commit 6
-    raise NotImplementedError("builder.build_graph not yet implemented")
+    # 1. Validate
+    validate_schema(schema)
+
+    # 2. Build state type + defaults
+    state_type = build_state_type(schema["state"])
+    defaults = _build_defaults(schema["state"])
+
+    # 3. Create graph
+    graph = StateGraph(state_type)
+
+    # 4. Index nodes
+    nodes_by_id = {n["id"]: n for n in schema["nodes"]}
+    start_id = next(n["id"] for n in schema["nodes"] if n["type"] == "start")
+    end_ids = {n["id"] for n in schema["nodes"] if n["type"] == "end"}
+
+    # 5. Add nodes (skip start/end — they map to START/END constants)
+    for node in schema["nodes"]:
+        if node["type"] in ("start", "end"):
+            continue
+        node_fn = _create_node_function(node, schema, llm_override)
+        graph.add_node(node["id"], node_fn)
+
+    # 6. Wire edges — translate start/end IDs to START/END constants
+    condition_ids = {n["id"] for n in schema["nodes"] if n["type"] == "condition"}
+    cond_edges: dict[str, dict[str, str]] = {}
+
+    for edge in schema["edges"]:
+        source = START if edge["source"] == start_id else edge["source"]
+        target = END if edge["target"] in end_ids else edge["target"]
+
+        if edge["source"] in condition_ids:
+            branch = edge.get("condition_branch")
+            if not branch:
+                raise GraphBuildError(
+                    "Edge from condition node missing condition_branch",
+                    node_ref=edge["source"],
+                )
+            cond_edges.setdefault(edge["source"], {})[branch] = target
+        else:
+            graph.add_edge(source, target)
+
+    # 7. Wire conditional edges
+    for cond_id, branch_map in cond_edges.items():
+        cond_node = nodes_by_id[cond_id]
+        router_fn = _make_router(cond_id, cond_node["config"], schema, llm_override)
+        graph.add_conditional_edges(cond_id, router_fn, branch_map)
+
+    # 8. Compile — add checkpointer if human_input nodes exist
+    has_human_input = any(n["type"] == "human_input" for n in schema["nodes"])
+    try:
+        if has_human_input:
+            from langgraph.checkpoint.memory import InMemorySaver
+
+            compiled = graph.compile(checkpointer=InMemorySaver())
+        else:
+            compiled = graph.compile()
+        return BuildResult(graph=compiled, defaults=defaults)
+    except Exception as exc:
+        raise GraphBuildError(f"Graph compilation failed: {exc}") from exc
