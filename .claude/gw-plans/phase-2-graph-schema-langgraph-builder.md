@@ -1,5 +1,7 @@
 # Execution Layer — Phase 2: GraphSchema → LangGraph Builder
 
+**Updated**: 2026-03-14 00:57 PDT
+
 ## Context
 
 The execution layer has auth (Phase 1.5), a DB layer, tools, and `state_utils` (Phase 1). The builder stub in `app/builder.py` raises `NotImplementedError`. This phase implements the core translation: a GraphSchema dict goes in, a compiled LangGraph `StateGraph` comes out, ready for `invoke()` and `stream()` in Phase 3.
@@ -392,7 +394,7 @@ Checks (in order):
 8. **Tool names exist**: `get_tool(config["tool_name"])` doesn't raise for each tool node
 9. **Output keys in state**: each llm/tool node's `output_key` matches a `state[].key`
 10. **Condition branches valid**: all target IDs in `config["branches"]` reference existing nodes
-11. **Default branch valid**: `config["default_branch"]` must be a key in `config["branches"]` or a valid node ID
+11. **Default branch valid**: `config["default_branch"]` must be a key in `config["branches"]` (routers return branch keys, not node IDs)
 12. **tool_error source**: incoming edge's source must be a tool node
 13. **Reachability**: BFS from start reaches all non-start/end nodes (warning log, not a block)
 
@@ -410,7 +412,7 @@ Type mapping:
 ```python
 _TYPE_MAP = {
     "string": str,
-    "number": int,
+    "number": float,  # float accepts both int and float in Python
     "boolean": bool,
     "list": list,
     "object": dict,
@@ -617,7 +619,9 @@ async def router(state):
     choice = response.content.strip().lower()
     # Fuzzy match: check substring containment, not just exact equality
     # LLMs often return "I would choose branch_a" instead of just "branch_a"
-    for opt in options:
+    # Sort by length descending so longer (more specific) options match first
+    # e.g., "yes_confirmed" matches before "yes"
+    for opt in sorted(options, key=len, reverse=True):
         if opt.lower() in choice:
             return opt
     return default
@@ -704,7 +708,12 @@ def build_graph(schema, *, llm_override=None):
         target = END if edge["target"] in end_ids else edge["target"]
 
         if edge["source"] in condition_ids:
-            branch = edge.get("condition_branch") or edge.get("label", "default")
+            branch = edge.get("condition_branch")
+            if not branch:
+                raise GraphBuildError(
+                    f"Edge from condition node missing condition_branch",
+                    node_ref=edge["source"],
+                )
             cond_edges.setdefault(edge["source"], {})[branch] = target
         else:
             graph.add_edge(source, target)
@@ -736,42 +745,52 @@ def build_graph(schema, *, llm_override=None):
 
 Add `"langchain-anthropic>=0.3.0"` to the `dependencies` list.
 
-### G2. Run `uv lock`
+### G2. Add `langchain-core` to dev dependencies
 
-Regenerate `uv.lock` with the new dependency.
+`FakeListChatModel` comes from `langchain-core` (transitive via `langchain-openai`). Add explicitly to dev dependencies so tests don't break if the transitive chain changes:
+
+```toml
+[dependency-groups]
+dev = [
+    "langchain-core>=0.3.0",  # FakeListChatModel for builder tests
+    ...
+]
+```
+
+**Important**: `FakeListChatModel(responses=["r1", "r2"])` returns responses in order — `r1` on first call, `r2` on second. Tests with multiple LLM nodes must order the response list to match node execution order. Each test should create a fresh instance.
+
+### G3. Pin `langgraph` lower bound to actual version
+
+Update `langgraph>=0.2.0` to `langgraph>=1.0.0,<2.0` — the lock file has 1.1.2 and the 0.x API is different.
+
+### G4. Run `uv lock`
+
+Regenerate `uv.lock` with the new dependencies.
 
 ---
 
 ## Part H: Tests
 
-### Test Coverage Analysis
+### Test Coverage Analysis (post-review)
 
 ```
-Core Flow                          Unit Tests        Integration Tests    Gap?
-─────────                          ──────────        ─────────────────    ────
-Schema validation (reject bad)     8 validation      —                    ✓ covered
-State type generation              4 state type      —                    ✓ covered
-LLM node (input→LLM→output)       3 LLM node        test_linear_graph    ✓ covered
-Tool node (input→tool→output)      3 tool node       test_linear_graph    ✓ covered
-Condition routing (6 types)        7 routing          test_branching       ✓ covered
-Human input (interrupt/resume)     1 interrupt        —                    ⚠ see gap 1
-Edge wiring (start/end→constants)  —                  all integration      ⚠ see gap 2
-BuildResult (graph + defaults)     —                  —                    ⚠ see gap 3
-LLM provider factory               3 LLM factory     —                    ✓ covered
-Error propagation (node_ref)       2 with node_ref   —                    ⚠ see gap 4
-Multiple end nodes                 —                  —                    ⚠ see gap 5
+Core Flow                          Unit Tests         Integration Tests         Coverage
+─────────                          ──────────         ─────────────────         ────────
+Schema validation (reject bad)     14 validation      —                         ✓ covered
+State type generation              4 state type       —                         ✓ covered
+Merge reducer edge cases           3 edge cases       —                         ✓ covered
+State defaults generation          3 defaults         test_defaults_applied     ✓ covered
+LLM node (input→LLM→output)       4 LLM node         test_linear_graph         ✓ covered
+Tool node (input→tool→output)      3 tool node        test_linear_graph         ✓ covered
+Condition routing (6 types)        8 routing           test_branching            ✓ covered
+LLM router (async condition)       —                  test_llm_router_*         ✓ covered
+Human input (interrupt+resume)     3 human input      —                         ✓ covered
+Edge wiring (start/end→constants)  —                  all integration           ✓ covered
+LLM provider factory               4 factory          —                         ✓ covered
+Multiple end nodes                 —                  test_multiple_end_nodes   ✓ covered
 ```
 
-### Gaps Identified & Tests Added
-
-**Gap 1**: Human input test only checks interrupt — doesn't verify resume.
-**Gap 2**: No dedicated test for start/end → START/END constant translation.
-**Gap 3**: `BuildResult.defaults` never tested — state defaults could silently break.
-**Gap 4**: Only 2 tests check `node_ref` on `GraphBuildError` — should verify all validation errors include it.
-**Gap 5**: No test for multiple end nodes (schema allows ≥1).
-**Gap 6**: `_format_inputs` not tested (single key vs multi-key formatting).
-**Gap 7**: `llm_router` condition not tested in integration (only sync routers tested).
-**Gap 8**: `_merge_reducer` edge cases (empty dicts, non-dict values overwriting dicts).
+All gaps from initial analysis and plan-reviewer feedback have been addressed.
 
 ---
 
@@ -790,23 +809,32 @@ Uses `FakeListChatModel` for deterministic LLM responses. No real API calls.
 
 **Test fixture**: `make_schema(**overrides)` — minimal valid schema (start → end) with `messages` + `result` state fields. Helper functions for adding nodes/edges to the base schema.
 
-**Validation tests (10)** — every error includes `node_ref` where applicable:
+**Validation tests (14)** — every error includes `node_ref` where applicable:
 - `test_valid_minimal_schema` — start → end compiles, returns `BuildResult`
 - `test_missing_start_node` → `GraphBuildError`
 - `test_multiple_start_nodes` → `GraphBuildError`
 - `test_no_end_node` → `GraphBuildError`
 - `test_duplicate_node_ids` → `GraphBuildError`
-- `test_edge_references_nonexistent_node` → `GraphBuildError`
+- `test_edge_bad_source` → `GraphBuildError` (edge source not in nodes)
+- `test_edge_bad_target` → `GraphBuildError` (edge target not in nodes)
+- `test_start_with_incoming_edge` → `GraphBuildError` ← **added (B1.6)**
+- `test_end_with_outgoing_edge` → `GraphBuildError` ← **added (B1.7)**
 - `test_tool_node_unknown_tool` → `GraphBuildError` with `node_ref == tool_node_id`
 - `test_output_key_not_in_state` → `GraphBuildError` with `node_ref == node_id`
-- `test_tool_error_without_tool_predecessor` → `GraphBuildError` with `node_ref` ← **added**
-- `test_default_branch_not_in_branches` → `GraphBuildError` ← **added**
+- `test_unknown_state_field_type` → `GraphBuildError` ← **added (unknown type in _TYPE_MAP)**
+- `test_tool_error_without_tool_predecessor` → `GraphBuildError` with `node_ref`
+- `test_default_branch_not_in_branches` → `GraphBuildError`
 
 **State type tests (4)**:
 - `test_replace_reducer` — plain type, no Annotated
 - `test_append_messages_reducer` — `Annotated[list, add_messages]`
 - `test_append_non_messages_reducer` — `Annotated[list, operator.add]`
 - `test_merge_reducer` — deep merge: `{"a": {"b": 1}}` + `{"a": {"c": 2}}` = `{"a": {"b": 1, "c": 2}}`
+
+**Merge reducer edge case tests (3)** ← **added**:
+- `test_merge_reducer_empty_left` — `{}` + `{"a": 1}` = `{"a": 1}`
+- `test_merge_reducer_empty_right` — `{"a": 1}` + `{}` = `{"a": 1}`
+- `test_merge_reducer_overwrite_dict_with_scalar` — `{"a": {"b": 1}}` + `{"a": "replaced"}` = `{"a": "replaced"}`
 
 **State defaults tests (3)** ← **new section**:
 - `test_defaults_from_schema` — `_build_defaults` returns correct defaults for each type
@@ -831,16 +859,19 @@ Uses `FakeListChatModel` for deterministic LLM responses. No real API calls.
 - `test_tool_error_success_path` / `test_tool_error_failure_path` — tool result routing
 - `test_iteration_limit` — count threshold routing
 
-**Human input tests (2)** ← **expanded**:
+**Human input tests (3)** ← **expanded**:
 - `test_human_input_interrupts` — graph pauses at human_input node, interrupt payload contains prompt + input_key + node_id
 - `test_human_input_graph_has_checkpointer` — `BuildResult.graph` compiled with `InMemorySaver` when human_input present
+- `test_human_input_resume` — invoke with `Command(resume="user answer")`, verify state includes `{input_key: "user answer"}` ← **added (HIGH gap)**
 
-**Full graph integration tests (5)** ← **expanded**:
+**Full graph integration tests (7)** ← **expanded**:
 - `test_linear_graph` — start → llm → tool → end compiles and invokes successfully
 - `test_branching_graph` — start → condition(field_equals) → (branch_a | branch_b) → end
 - `test_loop_with_iteration_limit` — start → tool → condition(iteration_limit) → (loop | end), verify loop executes expected count
-- `test_multiple_end_nodes` — graph with 2 end nodes, condition routes to either ← **added**
-- `test_defaults_applied_at_invocation` — invoke with `BuildResult.defaults` merged, verify all state fields initialized ← **added**
+- `test_multiple_end_nodes` — graph with 2 end nodes, condition routes to either
+- `test_defaults_applied_at_invocation` — invoke with `BuildResult.defaults` merged, verify all state fields initialized
+- `test_llm_router_integration` — build graph with `llm_router` condition, FakeListChatModel returns option name, verify correct branch taken ← **added (HIGH gap)**
+- `test_llm_router_substring_collision` — options `["no", "info"]`, LLM returns "no information", verify longer match `"info"` wins via length-sorted matching ← **added**
 
 ### Regression Prevention Matrix
 
@@ -858,6 +889,12 @@ Tool envelope missing success field  test_tool_node_output_envelope
 Human input doesn't pause            test_human_input_interrupts
 Defaults not provided → crash        test_defaults_applied_at_invocation
 Router name collision                test_branching_graph (multiple conditions)
+LLM router returns wrong branch      test_llm_router_integration + test_llm_router_substring_collision
+Human input resume fails             test_human_input_resume (Command(resume=...) flow)
+Merge reducer corrupts nested state  3 merge edge case tests (empty, overwrite)
+Unknown state field type accepted    test_unknown_state_field_type
+Start node accepts incoming edges    test_start_with_incoming_edge
+End node has outgoing edges          test_end_with_outgoing_edge
 New LangGraph version breaks API     All integration tests (build + invoke)
 ```
 
@@ -868,8 +905,8 @@ New LangGraph version breaks API     All integration tests (build + invoke)
 | Action | File |
 |--------|------|
 | **create** | `app/llm.py` — LLM provider factory |
-| **create** | `tests/unit/test_llm.py` — 3 provider tests |
-| **create** | `tests/unit/test_builder.py` — ~28 builder tests |
+| **create** | `tests/unit/test_llm.py` — 4 provider tests |
+| **create** | `tests/unit/test_builder.py` — ~49 builder tests |
 | **modify** | `app/builder.py` — full implementation |
 | **modify** | `pyproject.toml` — add `langchain-anthropic` |
 | **regen** | `uv.lock` — via `uv lock` |
@@ -883,7 +920,7 @@ cd packages/execution
 uv sync                                    # picks up langchain-anthropic
 uv run ruff check app/ tests/             # lint passes
 uv run ruff format --check app/ tests/    # format passes
-uv run pytest tests/unit/ -v              # all tests pass (existing + ~31 new)
+uv run pytest tests/unit/ -v              # all tests pass (existing + ~53 new)
 ```
 
 Manual smoke test:
@@ -917,8 +954,9 @@ schema = {
 
 mock = FakeListChatModel(responses=["42"])
 build_result = build_graph(schema, llm_override=mock)
-# Use ainvoke in async context (FastAPI). For smoke test, invoke is OK.
-result = build_result.graph.invoke({**build_result.defaults, "messages": [("human", "meaning of life?")]})
+# Always use ainvoke — never sync invoke() in async contexts
+import asyncio
+result = asyncio.run(build_result.graph.ainvoke({**build_result.defaults, "messages": [("human", "meaning of life?")]}))
 assert result["result"] == "42"
 ```
 
@@ -959,6 +997,7 @@ assert result["result"] == "42"
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
+| `number` type mapped to `int`, excluding floats | **BLOCKER → Fixed** | Map `"number"` to `float` — accepts both int and float in Python. |
 | `TypedDict` dynamic creation fails with `new_class()` | **BLOCKER → Fixed** | Use plain `type()` with `__annotations__` + `__module__`. LangGraph only needs `get_type_hints(schema, include_extras=True)` — does NOT check `is_typeddict()`. |
 | Sync `invoke()` fails inside FastAPI async context | **BLOCKER → Documented** | Builder returns compiled graph, doesn't invoke. Docstring documents: "Use `ainvoke()`/`astream()` only." Phase 3 enforces this. |
 | `MemorySaver` is a deprecated alias | Medium → Fixed | Use `InMemorySaver` from `langgraph.checkpoint.memory`. |
