@@ -9,7 +9,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
-from app.auth.deps import AuthContext, require_scope
+from app.auth.deps import AuthContext, owner_filter, require_scope
 from app.db import crud
 from app.db.connection import get_db
 from app.executor import RunManager, format_sse, stream_run_sse
@@ -71,7 +71,7 @@ async def stream_run(
         )
 
     # Not in RunManager — check DB
-    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
+    run = await crud.get_run(db, run_id, owner_id=owner_filter(auth))
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -190,7 +190,7 @@ async def run_status(
         )
 
     # Fall back to DB
-    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
+    run = await crud.get_run(db, run_id, owner_id=owner_filter(auth))
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -209,11 +209,6 @@ async def run_status(
 # ── List / Cancel / Delete ────────────────────────────────────────────
 
 
-def _owner_filter(auth: AuthContext) -> str | None:
-    """Return owner_id for DB filtering, or None for admin (sees all)."""
-    return None if auth.is_admin else auth.owner_id
-
-
 @router.get(
     "",
     response_model=PaginatedResponse,
@@ -230,7 +225,7 @@ async def list_all_runs(
     """List paginated run history across all graphs."""
     runs, total = await crud.list_runs(
         db,
-        owner_id=_owner_filter(auth),
+        owner_id=owner_filter(auth),
         graph_id=graph_id,
         status=status,
         limit=limit,
@@ -273,7 +268,7 @@ async def cancel_run(
         raise HTTPException(status_code=409, detail="Run is not cancellable")
 
     # DB fallback
-    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
+    run = await crud.get_run(db, run_id, owner_id=owner_filter(auth))
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     if run.status in ("running", "paused"):
@@ -314,7 +309,7 @@ async def delete_run(
                 detail="Cannot delete an active run. Cancel it first.",
             )
 
-    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
+    run = await crud.get_run(db, run_id, owner_id=owner_filter(auth))
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
     if run.status in ("running", "paused"):
@@ -322,5 +317,5 @@ async def delete_run(
             status_code=409,
             detail="Cannot delete an active run. Cancel it first.",
         )
-    await crud.delete_run(db, run_id, owner_id=_owner_filter(auth))
+    await crud.delete_run(db, run_id, owner_id=owner_filter(auth))
     return Response(status_code=204)

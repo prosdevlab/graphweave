@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse, Response
 from langchain_core.language_models import FakeListChatModel
 from langgraph.checkpoint.memory import InMemorySaver
 
-from app.auth.deps import AuthContext, require_scope
+from app.auth.deps import AuthContext, owner_filter, require_scope
 from app.builder import GraphBuildError, build_graph, validate_schema
 from app.db import crud
 from app.db.connection import get_db
@@ -27,11 +27,6 @@ from app.schemas.runs import StartRunRequest, StartRunResponse, run_to_list_item
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/graphs", tags=["Graphs"])
-
-
-def _owner_filter(auth: AuthContext) -> str | None:
-    """Return owner_id for CRUD filtering, or None for admin (sees all)."""
-    return None if auth.is_admin else auth.owner_id
 
 
 def _graph_response(graph) -> GraphResponse:
@@ -80,7 +75,7 @@ async def list_graphs(
     """
     graphs, total = await crud.list_graphs(
         db,
-        owner_id=_owner_filter(auth),
+        owner_id=owner_filter(auth),
         limit=limit,
         offset=offset,
     )
@@ -108,7 +103,7 @@ async def get_graph(
 
     Returns 404 if the graph doesn't exist or belongs to another key.
     """
-    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    graph = await crud.get_graph(db, graph_id, owner_id=owner_filter(auth))
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
     return _graph_response(graph)
@@ -132,7 +127,7 @@ async def update_graph(
         graph_id,
         body.name,
         body.schema_json,
-        owner_id=_owner_filter(auth),
+        owner_id=owner_filter(auth),
     )
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
@@ -151,7 +146,7 @@ async def delete_graph(
     db=Depends(get_db),
 ) -> Response:
     """Delete a graph by ID. Returns 204 on success with no body."""
-    deleted = await crud.delete_graph(db, graph_id, owner_id=_owner_filter(auth))
+    deleted = await crud.delete_graph(db, graph_id, owner_id=owner_filter(auth))
     if not deleted:
         raise HTTPException(status_code=404, detail="Graph not found")
     return Response(status_code=204)
@@ -175,7 +170,7 @@ async def validate_graph(
     db=Depends(get_db),
 ) -> ValidateResponse | JSONResponse:
     """Validate a graph's schema without executing it."""
-    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    graph = await crud.get_graph(db, graph_id, owner_id=owner_filter(auth))
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
 
@@ -222,7 +217,7 @@ async def export_graph(
     db=Depends(get_db),
 ) -> None:
     """Export graph as standalone Python code (not yet implemented)."""
-    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    graph = await crud.get_graph(db, graph_id, owner_id=owner_filter(auth))
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
     raise HTTPException(
@@ -251,14 +246,14 @@ async def list_runs_for_graph(
     db=Depends(get_db),
 ) -> PaginatedResponse:
     """List paginated run history for a specific graph."""
-    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    graph = await crud.get_graph(db, graph_id, owner_id=owner_filter(auth))
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
 
     runs, total = await crud.list_runs_by_graph(
         db,
         graph_id,
-        owner_id=_owner_filter(auth),
+        owner_id=owner_filter(auth),
         status=status,
         limit=limit,
         offset=offset,
@@ -298,7 +293,7 @@ async def start_run(
     db=Depends(get_db),
 ) -> StartRunResponse:
     """Start a new graph execution run."""
-    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    graph = await crud.get_graph(db, graph_id, owner_id=owner_filter(auth))
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
 

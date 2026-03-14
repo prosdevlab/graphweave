@@ -63,3 +63,8 @@ def require_scope(scope: str):
 
 
 require_admin = require_scope("admin")
+
+
+def owner_filter(auth: AuthContext) -> str | None:
+    """Return owner_id for CRUD filtering, or None for admin (sees all)."""
+    return None if auth.is_admin else auth.owner_id
