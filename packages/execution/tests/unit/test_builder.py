@@ -8,7 +8,9 @@ from typing import Annotated, get_type_hints
 
 import pytest
 from langchain_core.language_models import FakeListChatModel
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph.message import add_messages
+from langgraph.types import Command
 
 from app.builder import (
     BuildResult,
@@ -24,6 +26,7 @@ from app.builder import (
     _router_field_equals,
     _router_field_exists,
     _router_iteration_limit,
+    _router_llm,
     _router_tool_error,
     build_graph,
     build_state_type,
@@ -1038,3 +1041,355 @@ class TestBuildGraphIntegration:
         assert isinstance(result, BuildResult)
         assert hasattr(result, "graph")
         assert hasattr(result, "defaults")
+
+
+# ---------------------------------------------------------------------------
+# Additional validation tests (review findings)
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSchemaEdgeCases:
+    def test_start_with_incoming_edge(self):
+        """Validation check B1.6: start must not have incoming edges."""
+        schema = {
+            "id": "test",
+            "name": "Test",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 200},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "e"},
+                {"id": "e2", "source": "e", "target": "s"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+        # End has outgoing edge — caught first by check 7
+        with pytest.raises(GraphBuildError):
+            validate_schema(schema)
+
+    def test_end_with_outgoing_edge(self):
+        """Validation check B1.7: end must not have outgoing edges."""
+        schema = {
+            "id": "test",
+            "name": "Test",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "llm_1",
+                    "type": "llm",
+                    "label": "LLM",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"q": "messages[-1].content"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 200},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "llm_1"},
+                {"id": "e2", "source": "llm_1", "target": "e"},
+                {"id": "e3", "source": "e", "target": "llm_1"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+        with pytest.raises(
+            GraphBuildError, match="End node must not have outgoing edges"
+        ) as exc_info:
+            validate_schema(schema)
+        assert exc_info.value.node_ref == "e"
+
+    def test_unknown_state_field_type(self):
+        """Unknown type in _TYPE_MAP raises GraphBuildError."""
+        fields = [{"key": "x", "type": "binary", "reducer": "replace"}]
+        with pytest.raises(GraphBuildError, match="Unknown state field type: binary"):
+            build_state_type(fields)
+
+
+# ---------------------------------------------------------------------------
+# Human input tests (review findings — interrupt + checkpointer)
+# ---------------------------------------------------------------------------
+
+
+class TestHumanInputIntegration:
+    def _human_input_schema(self):
+        return {
+            "id": "human",
+            "name": "Human",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {
+                    "key": "user_answer",
+                    "type": "string",
+                    "reducer": "replace",
+                },
+                {"key": "result", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "ask",
+                    "type": "human_input",
+                    "label": "Ask User",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "prompt": "What is your name?",
+                        "input_key": "user_answer",
+                    },
+                },
+                {
+                    "id": "llm_1",
+                    "type": "llm",
+                    "label": "Greet",
+                    "position": {"x": 0, "y": 200},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "Greet the user.",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"name": "user_answer"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 300},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "ask"},
+                {"id": "e2", "source": "ask", "target": "llm_1"},
+                {"id": "e3", "source": "llm_1", "target": "e"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+
+    def test_human_input_graph_has_checkpointer(self):
+        """Graph with human_input nodes compiles with InMemorySaver."""
+        mock = FakeListChatModel(responses=["Hello!"])
+        result = build_graph(self._human_input_schema(), llm_override=mock)
+        assert result.graph.checkpointer is not None
+        assert isinstance(result.graph.checkpointer, InMemorySaver)
+
+    async def test_human_input_interrupts(self):
+        """Graph pauses at human_input node with interrupt payload."""
+        mock = FakeListChatModel(responses=["Hello Alice!"])
+        result = build_graph(self._human_input_schema(), llm_override=mock)
+
+        config = {"configurable": {"thread_id": "test-1"}}
+        await result.graph.ainvoke(result.defaults, config)
+
+        # Graph should have paused at the human_input node
+        graph_state = await result.graph.aget_state(config)
+        # next should contain the interrupted node
+        assert len(graph_state.next) > 0
+
+    async def test_human_input_resume(self):
+        """Resume after interrupt with Command(resume=value)."""
+        mock = FakeListChatModel(responses=["Hello Alice!"])
+        result = build_graph(self._human_input_schema(), llm_override=mock)
+
+        config = {"configurable": {"thread_id": "test-2"}}
+
+        # First invocation — graph pauses at human_input
+        await result.graph.ainvoke(result.defaults, config)
+
+        # Resume with user's answer
+        state = await result.graph.ainvoke(Command(resume="Alice"), config)
+        assert state["user_answer"] == "Alice"
+        assert state["result"] == "Hello Alice!"
+
+
+# ---------------------------------------------------------------------------
+# LLM router tests (review findings — async routing + substring collision)
+# ---------------------------------------------------------------------------
+
+
+class TestLLMRouter:
+    async def test_llm_router_basic(self):
+        """LLM router returns matched option from FakeListChatModel."""
+        mock = FakeListChatModel(responses=["support"])
+        condition = {
+            "prompt": "Classify the query",
+            "options": ["sales", "support", "billing"],
+        }
+        router = _router_llm(condition, "sales", llm_override=mock)
+        result = await router({})
+        assert result == "support"
+
+    async def test_llm_router_substring_collision(self):
+        """Longer options matched first to avoid 'no' matching 'info'."""
+        # LLM returns "information" — "no" is a substring, but "info"
+        # should win because it's sorted by length descending.
+        mock = FakeListChatModel(responses=["information"])
+        condition = {
+            "prompt": "Classify",
+            "options": ["no", "info"],
+        }
+        router = _router_llm(condition, "no", llm_override=mock)
+        result = await router({})
+        assert result == "info"
+
+    async def test_llm_router_no_match_returns_default(self):
+        """When LLM output doesn't match any option, return default."""
+        mock = FakeListChatModel(responses=["something completely different"])
+        condition = {
+            "prompt": "Classify",
+            "options": ["alpha", "beta"],
+        }
+        router = _router_llm(condition, "alpha", llm_override=mock)
+        result = await router({})
+        assert result == "alpha"
+
+    async def test_llm_router_integration(self):
+        """Full graph with llm_router condition routes correctly."""
+        schema = {
+            "id": "llm-route",
+            "name": "LLMRoute",
+            "version": 1,
+            "state": [
+                {"key": "messages", "type": "list", "reducer": "append"},
+                {"key": "result", "type": "string", "reducer": "replace"},
+                {"key": "query", "type": "string", "reducer": "replace"},
+            ],
+            "nodes": [
+                {
+                    "id": "s",
+                    "type": "start",
+                    "label": "Start",
+                    "position": {"x": 0, "y": 0},
+                    "config": {},
+                },
+                {
+                    "id": "cond_1",
+                    "type": "condition",
+                    "label": "Route",
+                    "position": {"x": 0, "y": 100},
+                    "config": {
+                        "condition": {
+                            "type": "llm_router",
+                            "prompt": "Classify the query",
+                            "options": ["sales", "support"],
+                        },
+                        "branches": {
+                            "sales": "e",
+                            "support": "llm_support",
+                        },
+                        "default_branch": "sales",
+                    },
+                },
+                {
+                    "id": "llm_support",
+                    "type": "llm",
+                    "label": "Support LLM",
+                    "position": {"x": 100, "y": 200},
+                    "config": {
+                        "provider": "openai",
+                        "model": "gpt-4o",
+                        "system_prompt": "You are support.",
+                        "temperature": 0.7,
+                        "max_tokens": 100,
+                        "input_map": {"q": "query"},
+                        "output_key": "result",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "label": "End",
+                    "position": {"x": 0, "y": 300},
+                    "config": {},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "s", "target": "cond_1"},
+                {
+                    "id": "e2",
+                    "source": "cond_1",
+                    "target": "e",
+                    "condition_branch": "sales",
+                },
+                {
+                    "id": "e3",
+                    "source": "cond_1",
+                    "target": "llm_support",
+                    "condition_branch": "support",
+                },
+                {"id": "e4", "source": "llm_support", "target": "e"},
+            ],
+            "metadata": {
+                "created_at": "2026-01-01",
+                "updated_at": "2026-01-01",
+            },
+        }
+
+        # llm_override is used for BOTH routing and node LLMs.
+        # We need a single mock that returns routing answer first,
+        # then the node answer. FakeListChatModel pops in order.
+        combined_mock = FakeListChatModel(
+            responses=["support", "I can help with that!"]
+        )
+        result = build_graph(schema, llm_override=combined_mock)
+        state = await result.graph.ainvoke(
+            {**result.defaults, "query": "my order is late"}
+        )
+        assert state["result"] == "I can help with that!"

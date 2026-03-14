@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import operator
 from collections import deque
+from collections.abc import Callable
 from typing import Annotated, NamedTuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -296,7 +297,7 @@ def _format_inputs(inputs: dict) -> str:
     return "\n".join(f"{k}: {v}" for k, v in inputs.items())
 
 
-def _make_llm_node(node_id: str, config: dict, llm) -> callable:
+def _make_llm_node(node_id: str, config: dict, llm) -> Callable:
     """Return an async node function that calls an LLM."""
 
     async def llm_node(state: dict) -> dict:
@@ -313,7 +314,7 @@ def _make_llm_node(node_id: str, config: dict, llm) -> callable:
     return llm_node
 
 
-def _make_tool_node(node_id: str, config: dict) -> callable:
+def _make_tool_node(node_id: str, config: dict) -> Callable:
     """Return a sync node function that runs a tool."""
 
     def tool_node(state: dict) -> dict:
@@ -326,7 +327,7 @@ def _make_tool_node(node_id: str, config: dict) -> callable:
     return tool_node
 
 
-def _make_passthrough_node() -> callable:
+def _make_passthrough_node() -> Callable:
     """Return a node function that does nothing (for condition nodes)."""
 
     def passthrough(state: dict) -> dict:
@@ -335,7 +336,7 @@ def _make_passthrough_node() -> callable:
     return passthrough
 
 
-def _make_human_node(node_id: str, config: dict) -> callable:
+def _make_human_node(node_id: str, config: dict) -> Callable:
     """Return a node function that interrupts for human input."""
 
     def human_node(state: dict) -> dict:
@@ -352,7 +353,7 @@ def _make_human_node(node_id: str, config: dict) -> callable:
     return human_node
 
 
-def _create_node_function(node: dict, schema: dict, llm_override=None) -> callable:
+def _create_node_function(node: dict, schema: dict, llm_override=None) -> Callable:
     """Create the appropriate node function for a given node."""
     match node["type"]:
         case "llm":
@@ -380,7 +381,7 @@ def _create_node_function(node: dict, schema: dict, llm_override=None) -> callab
 # ---------------------------------------------------------------------------
 
 
-def _router_field_equals(condition: dict, default: str) -> callable:
+def _router_field_equals(condition: dict, default: str) -> Callable:
     def router(state: dict) -> str:
         if state.get(condition["field"]) == condition["value"]:
             return condition["branch"]
@@ -389,7 +390,7 @@ def _router_field_equals(condition: dict, default: str) -> callable:
     return router
 
 
-def _router_field_contains(condition: dict, default: str) -> callable:
+def _router_field_contains(condition: dict, default: str) -> Callable:
     def router(state: dict) -> str:
         field_val = state.get(condition["field"], "")
         if condition["value"] in str(field_val):
@@ -399,7 +400,7 @@ def _router_field_contains(condition: dict, default: str) -> callable:
     return router
 
 
-def _router_field_exists(condition: dict, default: str) -> callable:
+def _router_field_exists(condition: dict, default: str) -> Callable:
     def router(state: dict) -> str:
         if condition["field"] in state and state[condition["field"]] is not None:
             return condition["branch"]
@@ -408,7 +409,7 @@ def _router_field_exists(condition: dict, default: str) -> callable:
     return router
 
 
-def _router_llm(condition: dict, default: str, llm_override=None) -> callable:
+def _router_llm(condition: dict, default: str, llm_override=None) -> Callable:
     async def router(state: dict) -> str:
         options = condition["options"]
         prompt = (
@@ -432,7 +433,7 @@ def _router_llm(condition: dict, default: str, llm_override=None) -> callable:
     return router
 
 
-def _router_tool_error(condition: dict, tool_output_key: str) -> callable:
+def _router_tool_error(condition: dict, tool_output_key: str) -> Callable:
     def router(state: dict) -> str:
         tool_output = state.get(tool_output_key, {})
         if isinstance(tool_output, dict) and tool_output.get("success"):
@@ -442,7 +443,7 @@ def _router_tool_error(condition: dict, tool_output_key: str) -> callable:
     return router
 
 
-def _router_iteration_limit(condition: dict) -> callable:
+def _router_iteration_limit(condition: dict) -> Callable:
     def router(state: dict) -> str:
         count = state.get(condition["field"], 0)
         if count >= condition["max"]:
@@ -454,7 +455,7 @@ def _router_iteration_limit(condition: dict) -> callable:
 
 def _make_router(
     node_id: str, config: dict, schema: dict, llm_override=None
-) -> callable:
+) -> Callable:
     """Create a routing function for a condition node."""
     condition = config["condition"]
     default = config.get("default_branch", "")
@@ -562,4 +563,5 @@ def build_graph(
             compiled = graph.compile()
         return BuildResult(graph=compiled, defaults=defaults)
     except Exception as exc:
-        raise GraphBuildError(f"Graph compilation failed: {exc}") from exc
+        logger.exception("Graph compilation failed")
+        raise GraphBuildError("Graph compilation failed") from exc
