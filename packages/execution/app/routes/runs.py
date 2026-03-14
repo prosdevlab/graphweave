@@ -14,7 +14,7 @@ from app.db import crud
 from app.db.connection import get_db
 from app.executor import RunManager, format_sse, stream_run_sse
 from app.schemas.pagination import PaginatedResponse
-from app.schemas.runs import ResumeRunRequest, RunListItem, RunStatusResponse
+from app.schemas.runs import ResumeRunRequest, RunStatusResponse, run_to_list_item
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ async def stream_run(
         )
 
     # Not in RunManager — check DB
-    run = await crud.get_run(db, run_id, owner_id=auth.owner_id)
+    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -190,7 +190,7 @@ async def run_status(
         )
 
     # Fall back to DB
-    run = await crud.get_run(db, run_id, owner_id=auth.owner_id)
+    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
     if run is None:
         raise HTTPException(status_code=404, detail="Run not found")
 
@@ -210,19 +210,8 @@ async def run_status(
 
 
 def _owner_filter(auth: AuthContext) -> str | None:
+    """Return owner_id for DB filtering, or None for admin (sees all)."""
     return None if auth.is_admin else auth.owner_id
-
-
-def _run_list_item(run) -> dict:
-    return RunListItem(
-        id=run.id,
-        graph_id=run.graph_id,
-        status=run.status,
-        input=run.input,
-        duration_ms=run.duration_ms,
-        created_at=run.created_at,
-        error=run.error,
-    ).model_dump()
 
 
 @router.get(
@@ -248,7 +237,7 @@ async def list_all_runs(
         offset=offset,
     )
     return PaginatedResponse(
-        items=[_run_list_item(r) for r in runs],
+        items=[run_to_list_item(r) for r in runs],
         total=total,
         limit=limit,
         offset=offset,
@@ -316,11 +305,14 @@ async def delete_run(
     """Delete a completed or error run from the database."""
     run_manager = _get_run_manager(request)
     ctx = run_manager.get_run(run_id)
-    if ctx is not None and ctx.status in ("running", "paused"):
-        raise HTTPException(
-            status_code=409,
-            detail="Cannot delete an active run. Cancel it first.",
-        )
+    if ctx is not None:
+        if ctx.owner_id != auth.owner_id and not auth.is_admin:
+            raise HTTPException(status_code=404, detail="Run not found")
+        if ctx.status in ("running", "paused"):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete an active run. Cancel it first.",
+            )
 
     run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
     if run is None:

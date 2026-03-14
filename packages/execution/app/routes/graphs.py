@@ -22,7 +22,7 @@ from app.schemas.graphs import (
     ValidateResponse,
 )
 from app.schemas.pagination import PaginatedResponse
-from app.schemas.runs import RunListItem, StartRunRequest, StartRunResponse
+from app.schemas.runs import StartRunRequest, StartRunResponse, run_to_list_item
 
 logger = logging.getLogger(__name__)
 
@@ -181,21 +181,6 @@ async def validate_graph(
 
     try:
         validate_schema(graph.schema_json)
-    except GraphBuildError as exc:
-        return JSONResponse(
-            status_code=422,
-            content=ValidateResponse(
-                valid=False,
-                errors=[
-                    SchemaValidationError(
-                        message=str(exc),
-                        node_ref=getattr(exc, "node_ref", None),
-                    )
-                ],
-            ).model_dump(),
-        )
-
-    try:
         mock = FakeListChatModel(responses=[""])
         build_graph(graph.schema_json, llm_override=mock)
     except GraphBuildError as exc:
@@ -251,18 +236,6 @@ async def export_graph(
 _RUN_STATUS = Literal["running", "paused", "completed", "error"]
 
 
-def _run_list_item(run) -> dict:
-    return RunListItem(
-        id=run.id,
-        graph_id=run.graph_id,
-        status=run.status,
-        input=run.input,
-        duration_ms=run.duration_ms,
-        created_at=run.created_at,
-        error=run.error,
-    ).model_dump()
-
-
 @router.get(
     "/{graph_id}/runs",
     response_model=PaginatedResponse,
@@ -291,7 +264,7 @@ async def list_runs_for_graph(
         offset=offset,
     )
     return PaginatedResponse(
-        items=[_run_list_item(r) for r in runs],
+        items=[run_to_list_item(r) for r in runs],
         total=total,
         limit=limit,
         offset=offset,

@@ -397,17 +397,12 @@ async def test_delete_completed_run(client, api_key):
 
 
 async def test_delete_active_run_rejected(client, api_key):
-    _, raw = api_key
+    key, raw = api_key
+    db = app.state.db
     gid = await _create_graph(client, raw)
-    resp = await client.post(
-        f"/v1/graphs/{gid}/run",
-        headers=_headers(raw),
-        json={"input": {"result": "1 + 1"}},
-    )
-    run_id = resp.json()["run_id"]
+    # Insert a run with "running" status directly in DB
+    run = await _insert_run(db, gid, key.id, "running")
 
-    # Try deleting immediately (still running)
-    resp = await client.delete(f"/v1/runs/{run_id}", headers=_headers(raw))
-    # Could be 409 (still in RunManager) or 204 (already completed)
-    # The run is very fast, so check both
-    assert resp.status_code in (204, 409)
+    resp = await client.delete(f"/v1/runs/{run.id}", headers=_headers(raw))
+    assert resp.status_code == 409
+    assert "cancel it first" in resp.json()["detail"].lower()
