@@ -28,6 +28,18 @@ class RunStatusResponse(BaseModel):
     error: str | None = None
 
 
+class RunListItem(BaseModel):
+    """Lightweight run representation for list endpoints."""
+
+    id: str
+    graph_id: str
+    status: str
+    input: dict = Field(default_factory=dict)
+    duration_ms: int | None = None
+    created_at: str
+    error: str | None = None
+
+
 class ResumeRunRequest(BaseModel):
     input: bool | str | dict | list | int | float = Field(
         ...,

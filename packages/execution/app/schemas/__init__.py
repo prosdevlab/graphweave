@@ -2,6 +2,7 @@
 
 from app.schemas.runs import (
     ResumeRunRequest,
+    RunListItem,
     RunStatusResponse,
     StartRunRequest,
     StartRunResponse,
@@ -9,6 +10,7 @@ from app.schemas.runs import (
 
 __all__ = [
     "ResumeRunRequest",
+    "RunListItem",
     "RunStatusResponse",
     "StartRunRequest",
     "StartRunResponse",

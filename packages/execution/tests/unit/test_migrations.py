@@ -30,7 +30,7 @@ def test_fresh_db_creates_tables(db_path):
     assert "api_keys" in tables
 
     version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-    assert version == 2
+    assert version == 3
     conn.close()
 
 
@@ -40,7 +40,7 @@ def test_idempotent_run(db_path):
 
     conn = sqlite3.connect(db_path)
     version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-    assert version == 2
+    assert version == 3
     conn.close()
 
 
@@ -48,7 +48,7 @@ def test_bad_migration_rolls_back(db_path, monkeypatch):
     run_migrations(db_path)
 
     bad_module = types.ModuleType("bad_migration")
-    bad_module.VERSION = 3
+    bad_module.VERSION = 4
 
     def bad_up(db):
         raise RuntimeError("intentional failure")
@@ -62,23 +62,23 @@ def test_bad_migration_rolls_back(db_path, monkeypatch):
 
     def patched_iter(path):
         yield from original_iter(path)
-        info = types.SimpleNamespace(name="003_bad", ispkg=False)
+        info = types.SimpleNamespace(name="004_bad", ispkg=False)
         yield info
 
     def patched_import(name):
-        if name == "app.db.migrations.003_bad":
+        if name == "app.db.migrations.004_bad":
             return bad_module
         return original_import(name)
 
     monkeypatch.setattr(runner_mod.pkgutil, "iter_modules", patched_iter)
     monkeypatch.setattr(runner_mod.importlib, "import_module", patched_import)
 
-    with pytest.raises(MigrationError, match="Migration 003 failed"):
+    with pytest.raises(MigrationError, match="Migration 004 failed"):
         run_migrations(db_path)
 
     conn = sqlite3.connect(db_path)
     version = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0]
-    assert version == 2
+    assert version == 3
     conn.close()
 
 

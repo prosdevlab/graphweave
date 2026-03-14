@@ -1,22 +1,26 @@
-"""Run routes — stream, resume, status."""
+"""Run routes — stream, resume, status, list, cancel, delete."""
 
 from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from app.auth.deps import AuthContext, require_scope
 from app.db import crud
 from app.db.connection import get_db
 from app.executor import RunManager, format_sse, stream_run_sse
-from app.schemas.runs import ResumeRunRequest, RunStatusResponse
+from app.schemas.pagination import PaginatedResponse
+from app.schemas.runs import ResumeRunRequest, RunListItem, RunStatusResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/runs", tags=["Runs"])
+
+_RUN_STATUS = Literal["running", "paused", "completed", "error"]
 
 
 def _get_run_manager(request: Request) -> RunManager:
@@ -200,3 +204,131 @@ async def run_status(
         duration_ms=run.duration_ms,
         error=run.error,
     )
+
+
+# ── List / Cancel / Delete ────────────────────────────────────────────
+
+
+def _owner_filter(auth: AuthContext) -> str | None:
+    return None if auth.is_admin else auth.owner_id
+
+
+def _run_list_item(run) -> dict:
+    return RunListItem(
+        id=run.id,
+        graph_id=run.graph_id,
+        status=run.status,
+        input=run.input,
+        duration_ms=run.duration_ms,
+        created_at=run.created_at,
+        error=run.error,
+    ).model_dump()
+
+
+@router.get(
+    "",
+    response_model=PaginatedResponse,
+    summary="List all runs",
+)
+async def list_all_runs(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: _RUN_STATUS | None = Query(default=None),
+    graph_id: str | None = Query(default=None),
+    auth: AuthContext = Depends(require_scope("runs:read")),
+    db=Depends(get_db),
+) -> PaginatedResponse:
+    """List paginated run history across all graphs."""
+    runs, total = await crud.list_runs(
+        db,
+        owner_id=_owner_filter(auth),
+        graph_id=graph_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedResponse(
+        items=[_run_list_item(r) for r in runs],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
+    )
+
+
+@router.post(
+    "/{run_id}/cancel",
+    status_code=202,
+    summary="Cancel a run",
+    responses={
+        404: {"description": "Run not found"},
+        409: {"description": "Run is not cancellable"},
+    },
+)
+async def cancel_run(
+    run_id: str,
+    request: Request,
+    auth: AuthContext = Depends(require_scope("runs:write")),
+    db=Depends(get_db),
+) -> dict:
+    """Request cancellation of a running or paused run."""
+    run_manager = _get_run_manager(request)
+    ctx = run_manager.get_run(run_id)
+
+    if ctx is not None:
+        if ctx.owner_id != auth.owner_id and not auth.is_admin:
+            raise HTTPException(status_code=404, detail="Run not found")
+        if ctx.status in ("running", "paused"):
+            await run_manager.cancel_run(run_id)
+            return {"detail": "Cancel requested"}
+        raise HTTPException(status_code=409, detail="Run is not cancellable")
+
+    # DB fallback
+    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status in ("running", "paused"):
+        await crud.update_run(
+            db,
+            run_id,
+            status="error",
+            error="Cancelled (server lost run)",
+        )
+        return {"detail": "Cancel requested"}
+    raise HTTPException(status_code=409, detail="Run is not cancellable")
+
+
+@router.delete(
+    "/{run_id}",
+    status_code=204,
+    summary="Delete a run",
+    responses={
+        404: {"description": "Run not found"},
+        409: {"description": "Run is still active"},
+    },
+)
+async def delete_run(
+    run_id: str,
+    request: Request,
+    auth: AuthContext = Depends(require_scope("runs:write")),
+    db=Depends(get_db),
+) -> Response:
+    """Delete a completed or error run from the database."""
+    run_manager = _get_run_manager(request)
+    ctx = run_manager.get_run(run_id)
+    if ctx is not None and ctx.status in ("running", "paused"):
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete an active run. Cancel it first.",
+        )
+
+    run = await crud.get_run(db, run_id, owner_id=_owner_filter(auth))
+    if run is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status in ("running", "paused"):
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot delete an active run. Cancel it first.",
+        )
+    await crud.delete_run(db, run_id, owner_id=_owner_filter(auth))
+    return Response(status_code=204)
