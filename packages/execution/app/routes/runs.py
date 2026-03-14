@@ -181,16 +181,8 @@ async def run_status(
             run_id=ctx.run_id,
             graph_id=ctx.graph_id,
             status=ctx.status,
-            node_id=(
-                ctx.events[-1]["data"].get("node_id")
-                if ctx.status == "paused" and ctx.events
-                else None
-            ),
-            prompt=(
-                ctx.events[-1]["data"].get("prompt")
-                if ctx.status == "paused" and ctx.events
-                else None
-            ),
+            node_id=ctx.paused_node_id,
+            prompt=ctx.paused_prompt,
         )
 
     # Fall back to DB

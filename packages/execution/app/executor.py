@@ -77,6 +77,8 @@ class RunContext:
     event_counter: int = 0  # monotonic counter for SSE id: field
     schema_dict: dict = field(default_factory=dict)
     total_pause_time: float = 0.0  # excluded from timeout
+    paused_node_id: str | None = None
+    paused_prompt: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +207,11 @@ class RunManager:
     def cleanup_run(self, run_id: str) -> None:
         """Remove run from tracking. Idempotent."""
         self._runs.pop(run_id, None)
+
+    async def cancel_all(self) -> None:
+        """Cancel all active runs. Used during shutdown."""
+        for run_id in list(self._runs):
+            await self.cancel_run(run_id)
 
 
 # ---------------------------------------------------------------------------
@@ -404,12 +411,14 @@ async def _stream_graph(
                 },
             )
             ctx.status = "paused"
+            ctx.paused_node_id = interrupt_val.get("node_id")
+            ctx.paused_prompt = interrupt_val.get("prompt")
             await _safe_update_run(
                 db,
                 ctx.run_id,
                 status="paused",
-                paused_node_id=interrupt_val.get("node_id"),
-                paused_prompt=interrupt_val.get("prompt"),
+                paused_node_id=ctx.paused_node_id,
+                paused_prompt=ctx.paused_prompt,
             )
 
             pause_start = time.monotonic()
@@ -418,6 +427,8 @@ async def _stream_graph(
 
             input_data = Command(resume=ctx.resume_value)
             ctx.status = "running"
+            ctx.paused_node_id = None
+            ctx.paused_prompt = None
             await _safe_update_run(
                 db,
                 ctx.run_id,
