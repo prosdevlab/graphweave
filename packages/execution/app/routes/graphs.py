@@ -193,6 +193,8 @@ async def start_run(
 
     run_manager = _get_run_manager(request)
     config = {"configurable": {"thread_id": run.id}}
+    # NOTE: db is app.state.db (long-lived connection), safe for background
+    # tasks. If get_db ever becomes request-scoped, pass app.state.db instead.
     try:
         await run_manager.start_run(
             run_id=run.id,

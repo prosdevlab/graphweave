@@ -65,9 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
-    # Cancel all active runs on shutdown
-    for run_id in list(run_manager._runs):
-        await run_manager.cancel_run(run_id)
+    await run_manager.cancel_all()
     logger.info("All active runs cancelled")
 
     await close_db(db)
