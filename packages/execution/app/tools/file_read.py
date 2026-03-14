@@ -43,14 +43,15 @@ class FileReadTool(BaseTool):
         try:
             size = os.fstat(fd).st_size
             if size > _MAX_FILE_SIZE:
-                os.close(fd)
                 return {
                     "success": False,
-                    "error": f"File too large: {size} bytes (max {_MAX_FILE_SIZE})",
+                    "error": (f"File too large: {size} bytes (max {_MAX_FILE_SIZE})"),
                     "recoverable": False,
                 }
 
+            # fdopen takes ownership of fd — closes it on exit
             with os.fdopen(fd, "r", encoding="utf-8") as f:
+                fd = -1  # prevent double-close in finally
                 text = f.read()
         except UnicodeDecodeError as exc:
             return {
@@ -64,6 +65,9 @@ class FileReadTool(BaseTool):
                 "error": f"Read error: {exc}",
                 "recoverable": False,
             }
+        finally:
+            if fd >= 0:
+                os.close(fd)
 
         truncated = len(text) > _MAX_TEXT_LENGTH
         if truncated:

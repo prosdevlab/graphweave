@@ -2,6 +2,29 @@
 
 from __future__ import annotations
 
+import re
+
+_SAFE_IDENTIFIER = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+class ExportError(Exception):
+    """Raised when a schema cannot be safely exported."""
+
+
+def _validate_identifier(value: str, context: str) -> str:
+    """Validate that a value is a safe Python identifier.
+
+    Raises ExportError if the value contains characters that could
+    inject code when interpolated into generated Python source.
+    """
+    if not _SAFE_IDENTIFIER.match(value):
+        raise ExportError(
+            f"Unsafe identifier for {context}: {value!r}. "
+            "Must match [a-zA-Z_][a-zA-Z0-9_]*"
+        )
+    return value
+
+
 # Type → Python type name mapping
 _TYPE_NAMES = {
     "string": "str",
@@ -56,6 +79,35 @@ def export_graph(schema: dict) -> dict:
     nodes = schema.get("nodes", [])
     edges = schema.get("edges", [])
     state_fields = schema.get("state", [])
+
+    # Validate all identifiers before interpolation into generated code
+    for n in nodes:
+        _validate_identifier(n["id"], "node_id")
+        cfg = n.get("config", {})
+        if "output_key" in cfg:
+            _validate_identifier(cfg["output_key"], "output_key")
+        if "input_key" in cfg:
+            _validate_identifier(cfg["input_key"], "input_key")
+        if "input_map" in cfg:
+            for key in cfg["input_map"]:
+                _validate_identifier(key, "input_map key")
+        cond = cfg.get("condition", {})
+        if "field" in cond:
+            _validate_identifier(cond["field"], "condition field")
+        if "branch" in cond:
+            _validate_identifier(cond["branch"], "condition branch")
+        if "on_success" in cond:
+            _validate_identifier(cond["on_success"], "on_success")
+        if "on_error" in cond:
+            _validate_identifier(cond["on_error"], "on_error")
+        if "continue" in cond:
+            _validate_identifier(cond["continue"], "continue branch")
+        if "exceeded" in cond:
+            _validate_identifier(cond["exceeded"], "exceeded branch")
+        if "default_branch" in cfg:
+            _validate_identifier(cfg["default_branch"], "default_branch")
+    for f in state_fields:
+        _validate_identifier(f["key"], "state field key")
 
     nodes_by_id = {n["id"]: n for n in nodes}
     start_id = next((n["id"] for n in nodes if n["type"] == "start"), None)
@@ -274,7 +326,7 @@ def _build_llm_function(node_id: str, config: dict) -> str:
     # Build messages
     lines.append("    from langchain_core.messages import HumanMessage, SystemMessage")
     lines.append(
-        f'    llm = {cls_name}(model="{model}", '
+        f'    llm = {cls_name}(model="{_escape(model)}", '
         f"temperature={temp}, max_tokens={max_tokens})"
     )
     lines.append("    messages = []")
@@ -288,7 +340,7 @@ def _build_llm_function(node_id: str, config: dict) -> str:
     if input_map:
         parts = []
         for key, expr in input_map.items():
-            parts.append(f'"{key}: " + str(state.get("{expr}", ""))')
+            parts.append(f'"{key}: " + str(state.get("{_escape(expr)}", ""))')
         user_content = ' + "\\n" + '.join(parts)
         lines.append(f"    messages.append(HumanMessage(content={user_content}))")
     else:
@@ -306,13 +358,13 @@ def _build_tool_function(node_id: str, config: dict) -> str:
     input_map = config.get("input_map", {})
 
     lines = [f"def {node_id}(state: GraphState) -> dict:"]
-    lines.append(f'    """Run the {tool_name} tool."""')
+    lines.append(f'    """Run the {_escape(tool_name)} tool."""')
 
     # Resolve inputs
     if input_map:
         lines.append("    inputs = {")
         for key, expr in input_map.items():
-            lines.append(f'        "{key}": state.get("{expr}", ""),')
+            lines.append(f'        "{key}": state.get("{_escape(expr)}", ""),')
         lines.append("    }")
     else:
         lines.append("    inputs = {}")
@@ -357,7 +409,7 @@ def _build_router_function(
 
     if ctype == "field_equals":
         field = condition.get("field", "")
-        value = condition.get("value", "")
+        value = _escape(condition.get("value", ""))
         branch = condition.get("branch", "")
         lines.append(f'    if state.get("{field}") == "{value}":')
         lines.append(f'        return "{branch}"')
@@ -365,7 +417,7 @@ def _build_router_function(
 
     elif ctype == "field_contains":
         field = condition.get("field", "")
-        value = condition.get("value", "")
+        value = _escape(condition.get("value", ""))
         branch = condition.get("branch", "")
         lines.append(f'    if "{value}" in str(state.get("{field}", "")):')
         lines.append(f'        return "{branch}"')
@@ -493,9 +545,14 @@ def _build_main_block(state_fields: list[dict]) -> str:
 
 
 def _python_default(type_name: str) -> object:
-    return {"string": "", "number": 0.0, "boolean": False, "list": [], "object": {}}[
-        type_name
-    ]
+    _defaults = {
+        "string": "",
+        "number": 0.0,
+        "boolean": False,
+        "list": [],
+        "object": {},
+    }
+    return _defaults.get(type_name, "")
 
 
 def _escape(s: str) -> str:
