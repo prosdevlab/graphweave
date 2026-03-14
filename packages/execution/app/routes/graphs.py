@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
@@ -21,7 +22,7 @@ from app.schemas.graphs import (
     ValidateResponse,
 )
 from app.schemas.pagination import PaginatedResponse
-from app.schemas.runs import StartRunRequest, StartRunResponse
+from app.schemas.runs import RunListItem, StartRunRequest, StartRunResponse
 
 logger = logging.getLogger(__name__)
 
@@ -245,7 +246,60 @@ async def export_graph(
     )
 
 
-# ── Run ────────────────────────────────────────────────────────────────
+# ── Run History ────────────────────────────────────────────────────────
+
+_RUN_STATUS = Literal["running", "paused", "completed", "error"]
+
+
+def _run_list_item(run) -> dict:
+    return RunListItem(
+        id=run.id,
+        graph_id=run.graph_id,
+        status=run.status,
+        input=run.input,
+        duration_ms=run.duration_ms,
+        created_at=run.created_at,
+        error=run.error,
+    ).model_dump()
+
+
+@router.get(
+    "/{graph_id}/runs",
+    response_model=PaginatedResponse,
+    summary="List runs for graph",
+    responses={404: {"description": "Graph not found"}},
+)
+async def list_runs_for_graph(
+    graph_id: str,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    status: _RUN_STATUS | None = Query(default=None),
+    auth: AuthContext = Depends(require_scope("runs:read")),
+    db=Depends(get_db),
+) -> PaginatedResponse:
+    """List paginated run history for a specific graph."""
+    graph = await crud.get_graph(db, graph_id, owner_id=_owner_filter(auth))
+    if graph is None:
+        raise HTTPException(status_code=404, detail="Graph not found")
+
+    runs, total = await crud.list_runs_by_graph(
+        db,
+        graph_id,
+        owner_id=_owner_filter(auth),
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedResponse(
+        items=[_run_list_item(r) for r in runs],
+        total=total,
+        limit=limit,
+        offset=offset,
+        has_more=(offset + limit) < total,
+    )
+
+
+# ── Start Run ─────────────────────────────────────────────────────────
 
 
 def _get_run_manager(request: Request):
