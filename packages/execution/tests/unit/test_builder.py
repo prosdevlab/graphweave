@@ -16,8 +16,14 @@ from app.builder import (
     _create_node_function,
     _format_inputs,
     _make_llm_node,
+    _make_router,
     _make_tool_node,
     _merge_reducer,
+    _router_field_contains,
+    _router_field_equals,
+    _router_field_exists,
+    _router_iteration_limit,
+    _router_tool_error,
     build_state_type,
     validate_schema,
 )
@@ -492,3 +498,125 @@ class TestCreateNodeFunction:
         }
         fn = _create_node_function(node, {})
         assert fn({}) == {}
+
+
+# ---------------------------------------------------------------------------
+# Condition routing tests
+# ---------------------------------------------------------------------------
+
+
+class TestRouterFieldEquals:
+    def test_match(self):
+        condition = {"field": "status", "value": "done", "branch": "finish"}
+        router = _router_field_equals(condition, "retry")
+        assert router({"status": "done"}) == "finish"
+
+    def test_no_match(self):
+        condition = {"field": "status", "value": "done", "branch": "finish"}
+        router = _router_field_equals(condition, "retry")
+        assert router({"status": "pending"}) == "retry"
+
+
+class TestRouterFieldContains:
+    def test_match(self):
+        condition = {"field": "text", "value": "error", "branch": "handle"}
+        router = _router_field_contains(condition, "continue")
+        assert router({"text": "an error occurred"}) == "handle"
+
+    def test_no_match(self):
+        condition = {"field": "text", "value": "error", "branch": "handle"}
+        router = _router_field_contains(condition, "continue")
+        assert router({"text": "all good"}) == "continue"
+
+
+class TestRouterFieldExists:
+    def test_exists(self):
+        condition = {"field": "data", "branch": "process"}
+        router = _router_field_exists(condition, "skip")
+        assert router({"data": {"key": "val"}}) == "process"
+
+    def test_not_exists(self):
+        condition = {"field": "data", "branch": "process"}
+        router = _router_field_exists(condition, "skip")
+        assert router({}) == "skip"
+
+    def test_exists_but_none(self):
+        condition = {"field": "data", "branch": "process"}
+        router = _router_field_exists(condition, "skip")
+        assert router({"data": None}) == "skip"
+
+
+class TestRouterToolError:
+    def test_success_path(self):
+        condition = {"on_success": "next", "on_error": "retry"}
+        router = _router_tool_error(condition, "tool_result")
+        state = {"tool_result": {"success": True, "result": "ok"}}
+        assert router(state) == "next"
+
+    def test_failure_path(self):
+        condition = {"on_success": "next", "on_error": "retry"}
+        router = _router_tool_error(condition, "tool_result")
+        state = {"tool_result": {"success": False, "error": "boom"}}
+        assert router(state) == "retry"
+
+    def test_missing_key_defaults_to_error(self):
+        condition = {"on_success": "next", "on_error": "retry"}
+        router = _router_tool_error(condition, "tool_result")
+        assert router({}) == "retry"
+
+
+class TestRouterIterationLimit:
+    def test_under_limit(self):
+        condition = {
+            "field": "count",
+            "max": 3,
+            "exceeded": "stop",
+            "continue": "loop",
+        }
+        router = _router_iteration_limit(condition)
+        assert router({"count": 1}) == "loop"
+
+    def test_at_limit(self):
+        condition = {
+            "field": "count",
+            "max": 3,
+            "exceeded": "stop",
+            "continue": "loop",
+        }
+        router = _router_iteration_limit(condition)
+        assert router({"count": 3}) == "stop"
+
+    def test_over_limit(self):
+        condition = {
+            "field": "count",
+            "max": 3,
+            "exceeded": "stop",
+            "continue": "loop",
+        }
+        router = _router_iteration_limit(condition)
+        assert router({"count": 5}) == "stop"
+
+
+class TestMakeRouter:
+    def test_sets_router_name(self):
+        config = {
+            "condition": {
+                "type": "field_equals",
+                "field": "x",
+                "value": "y",
+                "branch": "go",
+            },
+            "branches": {"go": "end"},
+            "default_branch": "go",
+        }
+        router = _make_router("cond_1", config, {})
+        assert router.__name__ == "route_cond_1"
+
+    def test_unknown_condition_type_raises(self):
+        config = {
+            "condition": {"type": "unknown_type"},
+            "branches": {},
+            "default_branch": "",
+        }
+        with pytest.raises(GraphBuildError, match="Unknown condition type"):
+            _make_router("cond_1", config, {})
