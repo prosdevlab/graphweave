@@ -464,12 +464,14 @@ async def test_validate_wrong_owner(client, admin_key):
     assert resp.status_code == 404
 
 
-async def test_export_returns_501(client, user_key):
+async def test_export_returns_200(client, user_key):
     _, raw = user_key
     gid = await _create_graph(client, raw)
     resp = await client.get(f"/v1/graphs/{gid}/export", headers=_headers(raw))
-    assert resp.status_code == 501
-    assert "not implemented" in resp.json()["detail"].lower()
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "code" in body
+    assert "requirements" in body
 
 
 async def test_export_graph_not_found(client, user_key):

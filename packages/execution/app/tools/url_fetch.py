@@ -10,35 +10,50 @@ import httpx
 import trafilatura
 
 from app.tools.base import BaseTool
+from app.tools.ssrf_transport import SSRFSafeTransport
 
 _MAX_TEXT_LENGTH = 10_000
 
 
-def validate_url(url: str) -> str | None:
-    """Return an error string if the URL is unsafe, ``None`` if OK."""
+def validate_url(url: str) -> tuple[str | None, str | None]:
+    """Validate a URL for SSRF safety.
+
+    Returns:
+        (error, resolved_ip) — error is set if URL is unsafe,
+        resolved_ip is the first safe IP address for DNS-pinning.
+    """
     try:
         parsed = urlparse(url)
     except Exception:
-        return f"Invalid URL: {url}"
+        return (f"Invalid URL: {url}", None)
 
     if parsed.scheme not in ("http", "https"):
-        return f"Only http/https URLs are allowed, got: {parsed.scheme or 'none'}"
+        return (
+            f"Only http/https URLs are allowed, got: {parsed.scheme or 'none'}",
+            None,
+        )
 
     hostname = parsed.hostname
     if not hostname:
-        return "URL has no hostname"
+        return ("URL has no hostname", None)
 
     try:
         addr_infos = socket.getaddrinfo(hostname, None)
     except socket.gaierror:
-        return f"Cannot resolve hostname: {hostname}"
+        return (f"Cannot resolve hostname: {hostname}", None)
 
+    resolved_ip = None
     for info in addr_infos:
         ip = ipaddress.ip_address(info[4][0])
         if ip.is_private or ip.is_reserved or ip.is_loopback or ip.is_link_local:
-            return f"Blocked: {hostname} resolves to private/reserved IP {ip}"
+            return (
+                f"Blocked: {hostname} resolves to private/reserved IP {ip}",
+                None,
+            )
+        if resolved_ip is None:
+            resolved_ip = str(ip)
 
-    return None
+    return (None, resolved_ip)
 
 
 class UrlFetchTool(BaseTool):
@@ -48,12 +63,15 @@ class UrlFetchTool(BaseTool):
     def run(self, inputs: dict) -> dict:
         url = inputs.get("url", "")
 
-        error = validate_url(url)
+        error, resolved_ip = validate_url(url)
         if error:
             return {"success": False, "error": error, "recoverable": False}
 
         try:
-            with httpx.Client(timeout=10, follow_redirects=False) as client:
+            transport = SSRFSafeTransport(resolved_ip)
+            with httpx.Client(
+                transport=transport, timeout=10, follow_redirects=False
+            ) as client:
                 response = client.get(url)
                 response.raise_for_status()
         except httpx.TimeoutException:
