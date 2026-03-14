@@ -3,10 +3,7 @@ name: code-reviewer
 description: "Code review specialist. Use PROACTIVELY after writing or modifying code, before commits, for PR review, or code quality check."
 tools: Read, Grep, Glob, Bash
 model: opus
-skills:
-  - gw-error-handling
-  - gw-security
-  - gw-api-design
+color: green
 ---
 
 ## Purpose

@@ -3,11 +3,7 @@ name: bug-investigator
 description: "Traces bugs through the codebase and identifies root causes. Use when debugging issues, investigating errors, or understanding why something is broken."
 tools: Read, Edit, Write, Glob, Grep, Bash
 model: sonnet
-permissionMode: acceptEdits
-skills:
-  - gw-execution
-  - gw-error-handling
-  - gw-testing
+color: orange
 ---
 
 ## Purpose
