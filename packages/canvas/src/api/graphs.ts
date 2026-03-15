@@ -11,33 +11,66 @@ interface PaginatedResponse<T> {
   has_more: boolean;
 }
 
+/** Backend response shape for graph endpoints */
+interface GraphResponse {
+  id: string;
+  name: string;
+  schema_json: GraphSchema;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Convert backend response to frontend GraphSchema */
+function toGraphSchema(res: GraphResponse): GraphSchema {
+  return {
+    ...res.schema_json,
+    id: res.id,
+    name: res.name,
+    metadata: {
+      ...res.schema_json.metadata,
+      created_at: res.created_at,
+      updated_at: res.updated_at,
+    },
+  };
+}
+
 // Fixes pre-existing bug: backend returns PaginatedResponse, not a flat array
 export async function listGraphs(): Promise<GraphSchema[]> {
-  const response = await request<PaginatedResponse<GraphSchema>>("/graphs");
-  return response.items;
+  const response = await request<PaginatedResponse<GraphResponse>>("/graphs");
+  return response.items.map(toGraphSchema);
 }
 
 export async function getGraph(id: string): Promise<GraphSchema> {
-  return request<GraphSchema>(`/graphs/${id}`);
+  const res = await request<GraphResponse>(`/graphs/${id}`);
+  return toGraphSchema(res);
 }
 
 export async function createGraph(
   graph: Omit<GraphSchema, "id" | "metadata">,
 ): Promise<GraphSchema> {
-  return request<GraphSchema>("/graphs", {
+  const res = await request<GraphResponse>("/graphs", {
     method: "POST",
-    body: JSON.stringify(graph),
+    body: JSON.stringify({
+      name: graph.name,
+      schema_json: graph,
+    }),
   });
+  return toGraphSchema(res);
 }
 
 export async function updateGraph(
   id: string,
   graph: Partial<Omit<GraphSchema, "id" | "metadata">>,
 ): Promise<GraphSchema> {
-  return request<GraphSchema>(`/graphs/${id}`, {
+  const res = await request<GraphResponse>(`/graphs/${id}`, {
     method: "PUT",
-    body: JSON.stringify(graph),
+    body: JSON.stringify({
+      name: graph.name,
+      schema_json: graph,
+    }),
   });
+  return toGraphSchema(res);
 }
 
 export async function deleteGraph(id: string): Promise<void> {
