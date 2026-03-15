@@ -1,21 +1,125 @@
-import type { EdgeSchema, GraphSchema, NodeSchema } from "@shared/schema";
+import type {
+  EdgeSchema,
+  GraphSchema,
+  NodeSchema,
+  StateField,
+} from "@shared/schema";
 import { create } from "zustand";
+
+const DEFAULT_STATE: StateField[] = [
+  { key: "messages", type: "list", reducer: "append", readonly: true },
+];
+
+/** Pre-places Start + End connected by an edge so the user isn't staring at a blank canvas. */
+function createStarterNodes(): {
+  nodes: NodeSchema[];
+  edges: EdgeSchema[];
+} {
+  const startId = crypto.randomUUID();
+  const endId = crypto.randomUUID();
+  return {
+    nodes: [
+      {
+        id: startId,
+        type: "start",
+        label: "Start",
+        position: { x: 250, y: 200 },
+        config: {},
+      },
+      {
+        id: endId,
+        type: "end",
+        label: "End",
+        position: { x: 550, y: 200 },
+        config: {},
+      },
+    ] as NodeSchema[],
+    edges: [{ id: `e-${startId}-${endId}`, source: startId, target: endId }],
+  };
+}
 
 export interface GraphSlice {
   graph: GraphSchema | null;
   nodes: NodeSchema[];
   edges: EdgeSchema[];
+  dirty: boolean;
+
   setGraph: (graph: GraphSchema) => void;
   addNode: (node: NodeSchema) => void;
   removeNode: (id: string) => void;
+  updateNodePosition: (id: string, position: { x: number; y: number }) => void;
+  addEdge: (edge: EdgeSchema) => void;
+  removeEdge: (id: string) => void;
+  removeNodes: (ids: string[]) => void;
+  newGraph: (name: string) => void;
+  renameGraph: (name: string) => void;
 }
 
 export const useGraphStore = create<GraphSlice>((set) => ({
   graph: null,
   nodes: [],
   edges: [],
-  setGraph: (graph) => set({ graph, nodes: graph.nodes, edges: graph.edges }),
-  addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
+  dirty: false,
+
+  setGraph: (graph) =>
+    set({ graph, nodes: graph.nodes, edges: graph.edges, dirty: false }),
+
+  addNode: (node) => set((s) => ({ nodes: [...s.nodes, node], dirty: true })),
+
   removeNode: (id) =>
-    set((s) => ({ nodes: s.nodes.filter((n) => n.id !== id) })),
+    set((s) => ({
+      nodes: s.nodes.filter((n) => n.id !== id),
+      edges: s.edges.filter((e) => e.source !== id && e.target !== id),
+      dirty: true,
+    })),
+
+  updateNodePosition: (id, position) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) => (n.id === id ? { ...n, position } : n)),
+      dirty: true,
+    })),
+
+  addEdge: (edge) => set((s) => ({ edges: [...s.edges, edge], dirty: true })),
+
+  removeEdge: (id) =>
+    set((s) => ({
+      edges: s.edges.filter((e) => e.id !== id),
+      dirty: true,
+    })),
+
+  removeNodes: (ids) => {
+    const idSet = new Set(ids);
+    set((s) => ({
+      nodes: s.nodes.filter((n) => !idSet.has(n.id)),
+      edges: s.edges.filter(
+        (e) => !idSet.has(e.source) && !idSet.has(e.target),
+      ),
+      dirty: true,
+    }));
+  },
+
+  newGraph: (name) => {
+    const { nodes, edges } = createStarterNodes();
+    set({
+      graph: {
+        id: crypto.randomUUID(),
+        name,
+        description: "",
+        version: 1,
+        state: DEFAULT_STATE,
+        nodes,
+        edges,
+        metadata: { created_at: "", updated_at: "" },
+      },
+      nodes,
+      edges,
+      dirty: false,
+    });
+  },
+
+  renameGraph: (name) =>
+    set((s) => ({
+      graph: s.graph ? { ...s.graph, name } : null,
+      dirty: true,
+    })),
 }));
