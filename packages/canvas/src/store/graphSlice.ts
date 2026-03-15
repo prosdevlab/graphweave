@@ -1,3 +1,10 @@
+import {
+  createGraph,
+  deleteGraph,
+  getGraph,
+  listGraphs,
+  updateGraph,
+} from "@api/graphs";
 import type {
   EdgeSchema,
   GraphSchema,
@@ -43,6 +50,9 @@ export interface GraphSlice {
   nodes: NodeSchema[];
   edges: EdgeSchema[];
   dirty: boolean;
+  persisted: boolean;
+  saving: boolean;
+  saveError: string | null;
 
   setGraph: (graph: GraphSchema) => void;
   addNode: (node: NodeSchema) => void;
@@ -57,13 +67,20 @@ export interface GraphSlice {
     id: string,
     updates: { label?: string; config?: Record<string, unknown> },
   ) => void;
+  saveGraph: () => Promise<void>;
+  loadGraph: (id: string) => Promise<void>;
+  loadGraphList: () => Promise<GraphSchema[]>;
+  deleteGraphById: (id: string) => Promise<void>;
 }
 
-export const useGraphStore = create<GraphSlice>((set) => ({
+export const useGraphStore = create<GraphSlice>((set, get) => ({
   graph: null,
   nodes: [],
   edges: [],
   dirty: false,
+  persisted: false,
+  saving: false,
+  saveError: null,
 
   setGraph: (graph) =>
     set({ graph, nodes: graph.nodes, edges: graph.edges, dirty: false }),
@@ -118,6 +135,9 @@ export const useGraphStore = create<GraphSlice>((set) => ({
       nodes,
       edges,
       dirty: false,
+      persisted: false,
+      saving: false,
+      saveError: null,
     });
   },
 
@@ -145,4 +165,68 @@ export const useGraphStore = create<GraphSlice>((set) => ({
           : n,
       ) as NodeSchema[],
     })),
+
+  saveGraph: async () => {
+    const state = get();
+    if (!state.graph) return;
+
+    set({ saving: true, saveError: null });
+    try {
+      const schema: Omit<GraphSchema, "id" | "metadata"> = {
+        name: state.graph.name,
+        description: state.graph.description,
+        version: state.graph.version,
+        state: state.graph.state,
+        nodes: state.nodes,
+        edges: state.edges,
+      };
+
+      let saved: GraphSchema;
+      if (state.persisted) {
+        saved = await updateGraph(state.graph.id, schema);
+      } else {
+        saved = await createGraph(schema);
+      }
+
+      set({
+        graph: saved,
+        nodes: saved.nodes,
+        edges: saved.edges,
+        dirty: false,
+        saving: false,
+        persisted: true,
+      });
+    } catch (e) {
+      set({
+        saveError: e instanceof Error ? e.message : "Save failed",
+        saving: false,
+      });
+    }
+  },
+
+  loadGraph: async (id) => {
+    try {
+      const graph = await getGraph(id);
+      set({
+        graph,
+        nodes: graph.nodes,
+        edges: graph.edges,
+        dirty: false,
+        saveError: null,
+        persisted: true,
+      });
+    } catch (e) {
+      set({
+        saveError: e instanceof Error ? e.message : "Load failed",
+      });
+    }
+  },
+
+  loadGraphList: async () => {
+    return listGraphs();
+  },
+
+  deleteGraphById: async (id) => {
+    await deleteGraph(id);
+  },
 }));
