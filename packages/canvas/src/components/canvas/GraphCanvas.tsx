@@ -4,9 +4,11 @@ import { SidebarProvider } from "@ui/Sidebar";
 import {
   Background,
   BackgroundVariant,
+  ConnectionMode,
   Controls,
   type Edge,
   type IsValidConnection,
+  MarkerType,
   MiniMap,
   type Node,
   type NodeMouseHandler,
@@ -14,11 +16,12 @@ import {
   type OnEdgesChange,
   type OnNodesChange,
   type OnNodesDelete,
+  type OnReconnect,
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useNodeDrop } from "../../hooks/useNodeDrop";
 import { toRFEdge, toRFNode } from "../../types/mappers";
 import { CanvasHint } from "./CanvasHint";
@@ -26,9 +29,6 @@ import { Toolbar } from "./Toolbar";
 import { nodeTypes } from "./nodes/nodeTypes";
 
 // ── Local RF state reducer ──────────────────────────────────────────
-// React Flow works best when it owns the visual state (positions during
-// drag, selection, dimensions). We use useReducer to apply RF changes
-// locally and sync meaningful events back to Zustand.
 
 interface RFState {
   nodes: Node[];
@@ -46,9 +46,15 @@ function rfReducer(state: RFState, action: RFAction): RFState {
     case "SET_FROM_STORE":
       return { nodes: action.nodes, edges: action.edges };
     case "APPLY_NODE_CHANGES":
-      return { ...state, nodes: applyNodeChanges(action.changes, state.nodes) };
+      return {
+        ...state,
+        nodes: applyNodeChanges(action.changes, state.nodes),
+      };
     case "APPLY_EDGE_CHANGES":
-      return { ...state, edges: applyEdgeChanges(action.changes, state.edges) };
+      return {
+        ...state,
+        edges: applyEdgeChanges(action.changes, state.edges),
+      };
     case "ADD_EDGE":
       return { ...state, edges: [...state.edges, action.edge] };
     default:
@@ -56,10 +62,21 @@ function rfReducer(state: RFState, action: RFAction): RFState {
   }
 }
 
+/** Default edge options — bezier with indigo arrowhead */
+const defaultEdgeOptions = {
+  type: "default",
+  markerEnd: {
+    type: MarkerType.ArrowClosed,
+    width: 16,
+    height: 16,
+    color: "#52525b",
+  },
+  style: { strokeWidth: 2, stroke: "#52525b" },
+};
+
 // ── GraphCanvas ─────────────────────────────────────────────────────
 
 export function GraphCanvas() {
-  // Zustand (source of truth for persistence)
   const storeNodes = useGraphStore((s) => s.nodes);
   const storeEdges = useGraphStore((s) => s.edges);
   const updateNodePosition = useGraphStore((s) => s.updateNodePosition);
@@ -71,13 +88,15 @@ export function GraphCanvas() {
     useCanvasContext();
   const { onDragOver, onDrop } = useNodeDrop(reactFlowInstance);
 
-  // Local RF state (owns visual state during interactions)
+  // Track the edge being reconnected to distinguish reconnect from new connection
+  const reconnectingEdgeRef = useRef<string | null>(null);
+
   const [rfState, dispatch] = useReducer(rfReducer, {
     nodes: [],
     edges: [],
   });
 
-  // Sync store → local RF state when store changes (load, add node, delete, etc.)
+  // Sync store → local RF state
   const rfNodesFromStore = useMemo(
     () =>
       storeNodes.map((n) => ({
@@ -108,6 +127,8 @@ export function GraphCanvas() {
       if (connection.source === connection.target) return false;
       if (targetNode.type === "start") return false;
       if (sourceNode.type === "end") return false;
+      // Allow duplicate during reconnect (same edge being moved)
+      if (reconnectingEdgeRef.current) return true;
       const duplicate = storeEdges.some(
         (e) => e.source === connection.source && e.target === connection.target,
       );
@@ -117,13 +138,9 @@ export function GraphCanvas() {
     [storeNodes, storeEdges],
   );
 
-  // RF applies changes locally for smooth interactions (drag, select, dimensions)
-  // On drag end, sync final position back to Zustand
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
       dispatch({ type: "APPLY_NODE_CHANGES", changes });
-
-      // Sync position to store on drag end
       for (const change of changes) {
         if (
           change.type === "position" &&
@@ -137,11 +154,9 @@ export function GraphCanvas() {
     [updateNodePosition],
   );
 
-  // RF applies edge changes locally, sync removals to store
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
       dispatch({ type: "APPLY_EDGE_CHANGES", changes });
-
       for (const change of changes) {
         if (change.type === "remove") {
           removeEdge(change.id);
@@ -159,12 +174,47 @@ export function GraphCanvas() {
           source: connection.source,
           target: connection.target,
         };
-        // Add to both local RF state and Zustand
         dispatch({ type: "ADD_EDGE", edge });
         addEdge(edge);
       }
     },
     [addEdge],
+  );
+
+  // Edge reconnection — drag an existing edge to rewire it
+  const onReconnectStart = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      reconnectingEdgeRef.current = edge.id;
+    },
+    [],
+  );
+
+  const onReconnect: OnReconnect = useCallback(
+    (oldEdge, newConnection) => {
+      reconnectingEdgeRef.current = null;
+      if (newConnection.source && newConnection.target) {
+        // Remove old edge, add new one
+        removeEdge(oldEdge.id);
+        const newEdge = {
+          id: `e-${newConnection.source}-${newConnection.target}`,
+          source: newConnection.source,
+          target: newConnection.target,
+        };
+        addEdge(newEdge);
+      }
+    },
+    [removeEdge, addEdge],
+  );
+
+  const onReconnectEnd = useCallback(
+    (_event: MouseEvent | TouchEvent, edge: Edge) => {
+      // If reconnect was cancelled (dropped on empty space), remove the edge
+      if (reconnectingEdgeRef.current === edge.id) {
+        removeEdge(edge.id);
+        reconnectingEdgeRef.current = null;
+      }
+    },
+    [removeEdge],
   );
 
   const onNodeClick: NodeMouseHandler = useCallback(
@@ -195,9 +245,14 @@ export function GraphCanvas() {
             nodes={rfState.nodes}
             edges={rfState.edges}
             nodeTypes={nodeTypes}
+            defaultEdgeOptions={defaultEdgeOptions}
+            connectionMode={ConnectionMode.Loose}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onReconnectStart={onReconnectStart}
+            onReconnect={onReconnect}
+            onReconnectEnd={onReconnectEnd}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             onNodesDelete={onNodesDelete}

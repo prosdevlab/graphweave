@@ -30,8 +30,12 @@ const NODE_DEFAULTS: Record<string, () => Partial<NodeSchema>> = {
   }),
 };
 
+/** Node types that can only appear once in a graph */
+const SINGLETON_TYPES = new Set(["start", "end"]);
+
 export function useNodeDrop(reactFlowInstance: ReactFlowInstance | null) {
   const addNode = useGraphStore((s) => s.addNode);
+  const nodes = useGraphStore((s) => s.nodes);
 
   const onDragOver = useCallback((event: DragEvent) => {
     event.preventDefault();
@@ -48,6 +52,14 @@ export function useNodeDrop(reactFlowInstance: ReactFlowInstance | null) {
       );
       if (!nodeType || !NODE_DEFAULTS[nodeType]) return;
 
+      // Prevent duplicate Start/End nodes
+      if (
+        SINGLETON_TYPES.has(nodeType) &&
+        nodes.some((n) => n.type === nodeType)
+      ) {
+        return;
+      }
+
       const position = reactFlowInstance.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -62,7 +74,7 @@ export function useNodeDrop(reactFlowInstance: ReactFlowInstance | null) {
 
       addNode(node);
     },
-    [reactFlowInstance, addNode],
+    [reactFlowInstance, addNode, nodes],
   );
 
   return { onDragOver, onDrop };

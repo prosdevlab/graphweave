@@ -15,9 +15,8 @@ const defaultProps = {
 } as unknown as Parameters<typeof StartNode>[0];
 
 describe("StartNode", () => {
-  it('renders with "START" badge and label', () => {
+  it("renders with label", () => {
     render(<StartNode {...defaultProps} />);
-    expect(screen.getByText("START")).toBeInTheDocument();
     expect(screen.getByText("Start")).toBeInTheDocument();
   });
 

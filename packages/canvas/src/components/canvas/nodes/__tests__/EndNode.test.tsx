@@ -15,9 +15,8 @@ const defaultProps = {
 } as unknown as Parameters<typeof EndNode>[0];
 
 describe("EndNode", () => {
-  it('renders with "END" badge and label', () => {
+  it("renders with label", () => {
     render(<EndNode {...defaultProps} />);
-    expect(screen.getByText("END")).toBeInTheDocument();
     expect(screen.getByText("End")).toBeInTheDocument();
   });
 

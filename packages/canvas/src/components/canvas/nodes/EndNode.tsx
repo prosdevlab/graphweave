@@ -10,8 +10,8 @@ function EndNodeComponent({ data, selected }: EndNodeProps) {
     <BaseNodeShell
       label={data.label}
       icon={Square}
-      typeLabel="END"
       accentClass="gw-node-end"
+      iconColor="text-red-400"
       selected={!!selected}
       sourceHandle={false}
     />
