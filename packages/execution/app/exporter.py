@@ -108,6 +108,10 @@ def export_graph(schema: dict) -> dict:
             _validate_identifier(cfg["default_branch"], "default_branch")
     for f in state_fields:
         _validate_identifier(f["key"], "state field key")
+    for edge in edges:
+        branch = edge.get("condition_branch") or edge.get("label")
+        if branch:
+            _validate_identifier(branch, "edge condition_branch")
 
     nodes_by_id = {n["id"]: n for n in nodes}
     start_id = next((n["id"] for n in nodes if n["type"] == "start"), None)
