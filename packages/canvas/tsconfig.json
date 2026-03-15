@@ -8,8 +8,10 @@
       "@store/*": ["./src/store/*"],
       "@ui/*": ["./src/components/ui/*"],
       "@shared/*": ["../../packages/shared/src/*"],
-      "@api/*": ["./src/api/*"]
-    }
+      "@api/*": ["./src/api/*"],
+      "@contexts/*": ["./src/contexts/*"]
+    },
+    "types": ["vitest/globals"]
   },
   "include": ["src"]
 }
