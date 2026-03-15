@@ -2,8 +2,9 @@
 
 /* Node base styles */
 .gw-node {
-  @apply rounded-lg border-2 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 shadow-md;
-  min-width: 140px;
+  @apply rounded-lg border-2 bg-zinc-900 px-3 py-2 text-xs text-zinc-100;
+  min-width: 120px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .gw-node-selected {
@@ -37,12 +38,35 @@
 }
 
 /* Handle styles */
-.react-flow__handle {
-  @apply h-3 w-3 rounded-full border-2 border-zinc-700 bg-zinc-500;
+.gw-handle.react-flow__handle {
+  @apply h-3 w-3 rounded-full border-2 border-zinc-600 bg-zinc-400 transition-colors;
+}
+.gw-handle.react-flow__handle:hover {
+  @apply border-indigo-400 bg-indigo-400;
+  transform: scale(1.2);
 }
 .react-flow__handle-connecting {
-  @apply bg-indigo-500;
+  @apply border-indigo-400 bg-indigo-400;
 }
 .react-flow__handle-valid {
-  @apply bg-emerald-500;
+  @apply border-emerald-400 bg-emerald-400;
+}
+
+/* Edge styles */
+.react-flow__edge-path {
+  stroke: #52525b;
+  stroke-width: 2;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: #a5b4fc;
+}
+.react-flow__edge-path.animated {
+  stroke-dasharray: 5;
+  animation: gw-edge-flow 0.5s linear infinite;
+}
+@keyframes gw-edge-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
 }

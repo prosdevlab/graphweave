@@ -10,8 +10,8 @@ function StartNodeComponent({ data, selected }: StartNodeProps) {
     <BaseNodeShell
       label={data.label}
       icon={Play}
-      typeLabel="START"
       accentClass="gw-node-start"
+      iconColor="text-emerald-400"
       selected={!!selected}
       targetHandle={false}
     />

@@ -20,8 +20,8 @@ function LLMNodeComponent({ data, selected }: LLMNodeProps) {
     <BaseNodeShell
       label={data.label}
       icon={Brain}
-      typeLabel="LLM"
       accentClass="gw-node-llm"
+      iconColor="text-indigo-400"
       selected={!!selected}
     >
       <div className="mt-1 flex items-center gap-1.5 text-zinc-400">

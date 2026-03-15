@@ -26,9 +26,8 @@ const defaultProps = {
 } as unknown as Parameters<typeof LLMNode>[0];
 
 describe("LLMNode", () => {
-  it('renders with "LLM" badge and label', () => {
+  it("renders with label", () => {
     render(<LLMNode {...defaultProps} />);
-    expect(screen.getByText("LLM")).toBeInTheDocument();
     expect(screen.getByText("Chat")).toBeInTheDocument();
   });
 
