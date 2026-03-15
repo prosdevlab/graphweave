@@ -34,7 +34,7 @@ function NewGraphDialogComponent() {
   );
 
   return (
-    <Dialog open={open} onClose={handleClose} title="New Graph">
+    <Dialog open={open} onClose={handleClose} title="Create a new graph">
       <div className="space-y-4">
         <div>
           <label

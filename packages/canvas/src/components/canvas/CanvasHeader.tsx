@@ -71,7 +71,7 @@ function CanvasHeaderComponent() {
                 onChange={handleNameChange}
                 onBlur={handleNameBlur}
                 onKeyDown={handleNameKeyDown}
-                className="w-40 border-b border-blue-500 bg-transparent text-sm text-zinc-100 outline-none"
+                className="w-40 border-b border-indigo-500 bg-transparent text-sm text-zinc-100 outline-none"
                 aria-label="Graph name"
               />
             ) : (

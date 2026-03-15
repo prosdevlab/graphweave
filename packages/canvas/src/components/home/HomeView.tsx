@@ -55,8 +55,8 @@ export function HomeView() {
                 <Play size={16} className="text-emerald-400" />
               </div>
               <div className="h-px w-8 bg-zinc-700" />
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-blue-500 bg-zinc-900">
-                <Brain size={16} className="text-blue-400" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-indigo-500 bg-zinc-900">
+                <Brain size={16} className="text-indigo-400" />
               </div>
               <div className="h-px w-8 bg-zinc-700" />
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-red-500 bg-zinc-900">

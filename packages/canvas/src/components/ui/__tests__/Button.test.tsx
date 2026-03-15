@@ -13,7 +13,7 @@ describe("Button", () => {
   it("renders with primary variant", () => {
     render(<Button variant="primary">Save</Button>);
     const btn = screen.getByRole("button", { name: "Save" });
-    expect(btn).toHaveClass("bg-blue-600");
+    expect(btn).toHaveClass("bg-indigo-600");
   });
 
   it("renders with ghost variant", () => {

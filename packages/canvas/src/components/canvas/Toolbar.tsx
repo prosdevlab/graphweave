@@ -1,3 +1,4 @@
+import { Card, CardContent } from "@ui/Card";
 import {
   Sidebar,
   SidebarContent,
@@ -13,32 +14,36 @@ import { type DragEvent, memo, useCallback } from "react";
 interface ToolbarItem {
   type: string;
   label: string;
+  description: string;
   icon: LucideIcon;
-  accentClass: string;
-  tooltip: string;
+  accentBorder: string;
+  iconColor: string;
 }
 
 const TOOLBAR_ITEMS: ToolbarItem[] = [
   {
     type: "start",
     label: "Start",
+    description: "Entry point of the graph",
     icon: Play,
-    accentClass: "border-emerald-500",
-    tooltip: "Entry point — drag to add",
+    accentBorder: "border-l-emerald-500",
+    iconColor: "text-emerald-400",
   },
   {
     type: "llm",
     label: "LLM",
+    description: "Call an AI model with a prompt",
     icon: Brain,
-    accentClass: "border-blue-500",
-    tooltip: "AI model call — drag to add",
+    accentBorder: "border-l-indigo-500",
+    iconColor: "text-indigo-400",
   },
   {
     type: "end",
     label: "End",
+    description: "Exit point of the graph",
     icon: Square,
-    accentClass: "border-red-500",
-    tooltip: "Exit point — drag to add",
+    accentBorder: "border-l-red-500",
+    iconColor: "text-red-400",
   },
 ];
 
@@ -53,19 +58,51 @@ function ToolbarComponent() {
   return (
     <Sidebar>
       <SidebarContent>
-        <div className="flex flex-col gap-1">
-          {TOOLBAR_ITEMS.map((item) => (
-            <Tooltip key={item.type} content={item.tooltip} side="right">
-              <div
+        {!collapsed && (
+          <h3 className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+            Nodes
+          </h3>
+        )}
+        <div className="flex flex-col gap-2">
+          {TOOLBAR_ITEMS.map((item) =>
+            collapsed ? (
+              <Tooltip key={item.type} content={item.label} side="right">
+                <Card
+                  interactive
+                  draggable
+                  onDragStart={(e: DragEvent) => onDragStart(e, item.type)}
+                  className={`cursor-grab border-l-2 ${item.accentBorder} active:cursor-grabbing`}
+                >
+                  <CardContent className="flex items-center justify-center px-0 py-2">
+                    <item.icon size={16} className={item.iconColor} />
+                  </CardContent>
+                </Card>
+              </Tooltip>
+            ) : (
+              <Card
+                key={item.type}
+                interactive
                 draggable
-                onDragStart={(e) => onDragStart(e, item.type)}
-                className={`flex cursor-grab items-center gap-2 rounded-md border-l-2 ${item.accentClass} px-2 py-2 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 active:cursor-grabbing`}
+                onDragStart={(e: DragEvent) => onDragStart(e, item.type)}
+                className={`cursor-grab border-l-2 ${item.accentBorder} active:cursor-grabbing`}
               >
-                <item.icon size={14} className="shrink-0" />
-                {!collapsed && <span>{item.label}</span>}
-              </div>
-            </Tooltip>
-          ))}
+                <CardContent className="px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <item.icon
+                      size={14}
+                      className={`shrink-0 ${item.iconColor}`}
+                    />
+                    <span className="text-xs font-medium text-zinc-200">
+                      {item.label}
+                    </span>
+                  </div>
+                  <p className="mt-1 pl-[22px] text-[11px] leading-tight text-zinc-500">
+                    {item.description}
+                  </p>
+                </CardContent>
+              </Card>
+            ),
+          )}
         </div>
       </SidebarContent>
       <SidebarFooter>
