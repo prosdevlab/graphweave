@@ -53,6 +53,10 @@ export interface GraphSlice {
   removeNodes: (ids: string[]) => void;
   newGraph: (name: string) => void;
   renameGraph: (name: string) => void;
+  updateNodeConfig: (
+    id: string,
+    updates: { label?: string; config?: Record<string, unknown> },
+  ) => void;
 }
 
 export const useGraphStore = create<GraphSlice>((set) => ({
@@ -121,5 +125,24 @@ export const useGraphStore = create<GraphSlice>((set) => ({
     set((s) => ({
       graph: s.graph ? { ...s.graph, name } : null,
       dirty: true,
+    })),
+
+  // Note: Start/End nodes have Record<string, never> configs.
+  // Config updates should be empty for them. The cast is safe
+  // because we never change node type via this action.
+  updateNodeConfig: (id, updates) =>
+    set((s) => ({
+      dirty: true,
+      nodes: s.nodes.map((n) =>
+        n.id === id
+          ? {
+              ...n,
+              ...(updates.label !== undefined ? { label: updates.label } : {}),
+              ...(updates.config !== undefined
+                ? { config: { ...n.config, ...updates.config } }
+                : {}),
+            }
+          : n,
+      ) as NodeSchema[],
     })),
 }));
