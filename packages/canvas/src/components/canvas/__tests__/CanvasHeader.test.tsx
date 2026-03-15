@@ -89,7 +89,7 @@ describe("CanvasHeader", () => {
     expect(screen.getByText("Saving...")).toBeInTheDocument();
   });
 
-  it("shows error message when saveError is set", () => {
+  it("shows error toast when saveError is set", () => {
     mockSaveError = "Network error";
     render(<CanvasHeader />);
     expect(screen.getByRole("alert")).toHaveTextContent("Network error");
