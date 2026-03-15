@@ -17,7 +17,7 @@ React 19 + React Flow frontend phases. Depends on execution phases 3-4 for API s
 
 | Part | Plan | Summary | Status |
 |------|------|---------|--------|
-| 1.1 | [phase-1.1-test-infra-ui-base.md](phase-1-canvas-core/phase-1.1-test-infra-ui-base.md) | Test infra (Vitest), lucide-react, 9 shadcn UI components (Button, Input, Select, Textarea, Dialog, Sheet, Sidebar, Tooltip, Card), CanvasContext | Not started |
+| 1.1 | [phase-1.1-test-infra-ui-base.md](phase-1-canvas-core/phase-1.1-test-infra-ui-base.md) | Test infra (Vitest), lucide-react, 9 shadcn UI components (Button, Input, Select, Textarea, Dialog, Sheet, Sidebar, Tooltip, Card), CanvasContext | In progress |
 | 1.2 | [phase-1.2-node-components.md](phase-1-canvas-core/phase-1.2-node-components.md) | BaseNodeShell + Start/LLM/End node presenters | Not started |
 | 1.3 | [phase-1.3-graph-canvas.md](phase-1-canvas-core/phase-1.3-graph-canvas.md) | GraphCanvas container, Toolbar with tooltips, connection validation, canvas hint, starter template | Not started |
 | 1.4 | [phase-1.4-config-panel.md](phase-1-canvas-core/phase-1.4-config-panel.md) | NodeConfigPanel with slide transition + config forms | Not started |
