@@ -20,7 +20,9 @@ class BaseTool(ABC):
         """Execute the tool.
 
         Returns:
-            Response envelope: { success, result/error, recoverable }.
+            Response envelope:
+            - Success: { success: True, result, source, truncated }
+            - Error:   { success: False, error, recoverable }
         """
         ...
 
