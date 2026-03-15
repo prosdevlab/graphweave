@@ -11,6 +11,7 @@ export default defineConfig({
       "@shared": path.resolve(__dirname, "../../packages/shared/src"),
       "@api": path.resolve(__dirname, "./src/api"),
       "@contexts": path.resolve(__dirname, "./src/contexts"),
+      "@styles": path.resolve(__dirname, "./src/styles"),
     },
   },
   test: {

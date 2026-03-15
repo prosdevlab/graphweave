@@ -41,7 +41,7 @@ const DOT_KEYS = ["dot-a", "dot-b", "dot-c"];
 function middleDots(nodeCount: number) {
   const count = Math.min(Math.max(nodeCount - 2, 0), 3);
   return DOT_KEYS.slice(0, count).map((key) => (
-    <div key={key} className="h-3 w-3 rounded-full bg-blue-500/60" />
+    <div key={key} className="h-3 w-3 rounded-full bg-indigo-500/60" />
   ));
 }
 

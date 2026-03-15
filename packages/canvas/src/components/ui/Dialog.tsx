@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { type ReactNode, useEffect, useRef } from "react";
+import { IconButton } from "./IconButton";
 
 interface DialogProps {
   open: boolean;
@@ -22,18 +23,13 @@ export function Dialog({ open, onClose, title, children }: DialogProps) {
     <dialog
       ref={ref}
       onClose={onClose}
-      className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-0 text-zinc-100 shadow-xl backdrop:bg-black/50"
+      className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md rounded-lg bg-zinc-900 p-0 text-zinc-100 shadow-xl backdrop:bg-black/50"
     >
       <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-4">
         <h2 className="text-sm font-semibold">{title}</h2>
-        <button
-          onClick={onClose}
-          className="text-zinc-500 hover:text-zinc-300"
-          aria-label="Close"
-          type="button"
-        >
+        <IconButton onClick={onClose} aria-label="Close">
           <X size={16} />
-        </button>
+        </IconButton>
       </div>
       <div className="px-6 py-4">{children}</div>
     </dialog>

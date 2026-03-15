@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
+import { IconButton } from "./IconButton";
 
 type SheetSide = "left" | "right";
 
@@ -46,14 +47,9 @@ export function Sheet({
     >
       <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
-        <button
-          onClick={onClose}
-          className="rounded-sm p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-300"
-          aria-label="Close panel"
-          type="button"
-        >
+        <IconButton onClick={onClose} aria-label="Close panel">
           <X size={14} />
-        </button>
+        </IconButton>
       </div>
       <div
         className="overflow-y-auto p-4"

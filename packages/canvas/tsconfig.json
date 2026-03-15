@@ -9,7 +9,8 @@
       "@ui/*": ["./src/components/ui/*"],
       "@shared/*": ["../../packages/shared/src/*"],
       "@api/*": ["./src/api/*"],
-      "@contexts/*": ["./src/contexts/*"]
+      "@contexts/*": ["./src/contexts/*"],
+      "@styles/*": ["./src/styles/*"]
     },
     "types": ["vitest/globals"]
   },

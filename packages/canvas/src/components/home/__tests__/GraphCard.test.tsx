@@ -46,10 +46,10 @@ describe("GraphCard", () => {
     );
     // start (green) + 2 middle (blue) + end (red)
     const greenDots = container.querySelectorAll(".bg-emerald-500\\/60");
-    const blueDots = container.querySelectorAll(".bg-blue-500\\/60");
+    const indigoDots = container.querySelectorAll(".bg-indigo-500\\/60");
     const redDots = container.querySelectorAll(".bg-red-500\\/60");
     expect(greenDots).toHaveLength(1);
-    expect(blueDots).toHaveLength(2); // min(4-2, 3) = 2
+    expect(indigoDots).toHaveLength(2); // min(4-2, 3) = 2
     expect(redDots).toHaveLength(1);
   });
 });
