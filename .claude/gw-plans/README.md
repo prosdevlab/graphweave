@@ -9,8 +9,8 @@ Implementation deviations are logged at the bottom of each plan file.
 
 | Track | Description | Status |
 |-------|-------------|--------|
-| [Execution](execution/) | FastAPI + LangGraph backend | Phases 1-4 merged, 5 in progress |
-| [Canvas](canvas/) | React + React Flow frontend | Not started |
+| [Execution](execution/) | FastAPI + LangGraph backend | Phases 1-5 merged |
+| [Canvas](canvas/) | React + React Flow frontend | Phase 1 in progress |
 | Deployment | Cloud Run + Vercel + CI/CD | Not started (after both tracks) |
 
 ## Status Legend
