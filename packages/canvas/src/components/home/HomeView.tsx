@@ -49,7 +49,7 @@ export function HomeView() {
             <span className="text-sm text-zinc-500">Loading...</span>
           </div>
         ) : graphs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20">
+          <div className="flex h-full flex-col items-center justify-center">
             <div className="mb-6 flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border-2 border-emerald-500 bg-zinc-900">
                 <Play size={16} className="text-emerald-400" />
