@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useNodeDrop } from "../../hooks/useNodeDrop";
 import { toRFEdge, toRFNode } from "../../types/mappers";
 import { CanvasHint } from "./CanvasHint";
+import { SnapConnectionLine } from "./SnapConnectionLine";
 import { Toolbar } from "./Toolbar";
 import { nodeTypes } from "./nodes/nodeTypes";
 
@@ -246,7 +247,9 @@ export function GraphCanvas() {
             edges={rfState.edges}
             nodeTypes={nodeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
-            connectionMode={ConnectionMode.Loose}
+            connectionMode={ConnectionMode.Strict}
+            connectionLineComponent={SnapConnectionLine}
+            connectionLineStyle={{ strokeWidth: 2, stroke: "#52525b" }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
