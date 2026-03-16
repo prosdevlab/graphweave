@@ -29,14 +29,9 @@ export async function request<T>(
     "Content-Type": "application/json",
   };
 
-  const apiKey = import.meta.env.VITE_API_KEY;
-  if (apiKey) {
-    headers["X-API-Key"] = apiKey;
-  }
-
   const response = await fetch(`${BASE_URL}${path}`, {
-    headers,
     ...options,
+    headers: { ...headers, ...options?.headers },
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
