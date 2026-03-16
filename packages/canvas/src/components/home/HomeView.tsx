@@ -2,16 +2,28 @@ import type { GraphSchema } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { useUIStore } from "@store/uiSlice";
 import { Button } from "@ui/Button";
+import { Dialog } from "@ui/Dialog";
+import { Input } from "@ui/Input";
 import { Brain, Play, Plus, Square } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GraphCard } from "./GraphCard";
 import { NewGraphDialog } from "./NewGraphDialog";
+
+type DeleteTarget = { id: string; name: string };
+type RenameTarget = { id: string; name: string };
 
 export function HomeView() {
   const [graphs, setGraphs] = useState<GraphSchema[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
   const loadGraphList = useGraphStore((s) => s.loadGraphList);
   const loadGraph = useGraphStore((s) => s.loadGraph);
+  const deleteGraphById = useGraphStore((s) => s.deleteGraphById);
+  const renameGraphById = useGraphStore((s) => s.renameGraphById);
   const setView = useUIStore((s) => s.setView);
   const setNewGraphDialogOpen = useUIStore((s) => s.setNewGraphDialogOpen);
 
@@ -33,6 +45,36 @@ export function HomeView() {
   const handleNewGraph = useCallback(() => {
     setNewGraphDialogOpen(true);
   }, [setNewGraphDialogOpen]);
+
+  const handleDeleteConfirm = useCallback(async () => {
+    if (!deleteTarget) return;
+    await deleteGraphById(deleteTarget.id);
+    setGraphs((prev) => prev.filter((g) => g.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  }, [deleteTarget, deleteGraphById]);
+
+  const handleRenameOpen = useCallback((id: string, name: string) => {
+    setRenameTarget({ id, name });
+    setRenameValue(name);
+  }, []);
+
+  const handleRenameConfirm = useCallback(async () => {
+    if (!renameTarget || !renameValue.trim()) return;
+    const updated = await renameGraphById(renameTarget.id, renameValue.trim());
+    setGraphs((prev) =>
+      prev.map((g) =>
+        g.id === renameTarget.id ? { ...g, name: updated.name } : g,
+      ),
+    );
+    setRenameTarget(null);
+  }, [renameTarget, renameValue, renameGraphById]);
+
+  // Auto-focus and select the input when the rename dialog opens
+  useEffect(() => {
+    if (renameTarget) {
+      requestAnimationFrame(() => renameInputRef.current?.select());
+    }
+  }, [renameTarget]);
 
   return (
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
@@ -81,9 +123,11 @@ export function HomeView() {
                 <GraphCard
                   key={g.id}
                   name={g.name}
-                  nodeCount={g.nodes.length}
-                  updatedAt={g.metadata.updated_at}
+                  nodeCount={g.nodes?.length ?? 0}
+                  updatedAt={g.metadata?.updated_at ?? ""}
                   onClick={() => handleSelectGraph(g.id)}
+                  onDelete={() => setDeleteTarget({ id: g.id, name: g.name })}
+                  onRename={() => handleRenameOpen(g.id, g.name)}
                 />
               ))}
             </div>
@@ -92,6 +136,67 @@ export function HomeView() {
       </main>
 
       <NewGraphDialog />
+
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete Graph"
+      >
+        <p className="mb-6 text-sm text-zinc-400">
+          Are you sure you want to delete &ldquo;{deleteTarget?.name}&rdquo;?
+          This action is permanent and cannot be undone.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDeleteConfirm}>
+            Delete
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Rename dialog */}
+      <Dialog
+        open={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title="Rename Graph"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleRenameConfirm();
+          }}
+        >
+          <Input
+            ref={renameInputRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            className="mb-6"
+            placeholder="Graph name"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setRenameTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={
+                !renameValue.trim() || renameValue.trim() === renameTarget?.name
+              }
+            >
+              Save
+            </Button>
+          </div>
+        </form>
+      </Dialog>
     </div>
   );
 }
