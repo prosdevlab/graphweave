@@ -1,6 +1,6 @@
 import { useGraphStore } from "@store/graphSlice";
+import { useUIStore } from "@store/uiSlice";
 import { Button } from "@ui/Button";
-import { Toast } from "@ui/Toast";
 import { ChevronLeft, Pencil, Save } from "lucide-react";
 import {
   type KeyboardEvent,
@@ -22,13 +22,12 @@ function CanvasHeaderComponent() {
   const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Show toast when saveError appears
   useEffect(() => {
     if (saveError) {
-      setToastMessage(saveError);
+      useUIStore.getState().showToast(saveError, "error");
     }
   }, [saveError]);
 
@@ -127,15 +126,6 @@ function CanvasHeaderComponent() {
           {saving ? "Saving..." : "Save"}
         </Button>
       </header>
-
-      {toastMessage && (
-        <Toast
-          message={toastMessage}
-          variant="error"
-          duration={0}
-          onDismiss={() => setToastMessage(null)}
-        />
-      )}
     </>
   );
 }

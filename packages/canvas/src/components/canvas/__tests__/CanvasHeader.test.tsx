@@ -5,11 +5,18 @@ import { CanvasHeader } from "../CanvasHeader";
 const mockNavigate = vi.fn();
 const mockSaveGraph = vi.fn();
 const mockRenameGraph = vi.fn();
+const mockShowToast = vi.fn();
 
 let mockGraph: { name: string } | null = { name: "Test Graph" };
 let mockDirty = false;
 let mockSaving = false;
 let mockSaveError: string | null = null;
+
+vi.mock("@store/uiSlice", () => ({
+  useUIStore: {
+    getState: () => ({ showToast: mockShowToast }),
+  },
+}));
 
 vi.mock("@store/graphSlice", () => ({
   useGraphStore: (selector: (s: Record<string, unknown>) => unknown) =>
@@ -32,6 +39,7 @@ beforeEach(() => {
   mockDirty = false;
   mockSaving = false;
   mockSaveError = null;
+  mockShowToast.mockClear();
   vi.clearAllMocks();
 });
 
@@ -86,10 +94,10 @@ describe("CanvasHeader", () => {
     expect(screen.getByText("Saving...")).toBeInTheDocument();
   });
 
-  it("shows error toast when saveError is set", () => {
+  it("shows error toast via useUIStore when saveError is set", () => {
     mockSaveError = "Network error";
     render(<CanvasHeader />);
-    expect(screen.getByRole("alert")).toHaveTextContent("Network error");
+    expect(mockShowToast).toHaveBeenCalledWith("Network error", "error");
   });
 
   it("clicking back with dirty state shows confirm dialog", async () => {
