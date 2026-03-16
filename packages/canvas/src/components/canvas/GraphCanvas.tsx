@@ -92,7 +92,6 @@ export function GraphCanvas() {
     setSelectedNodeId,
     reactFlowInstance,
     stampNodeType,
-    setStampNodeType,
   } = useCanvasContext();
   const toastMessage = useUIStore((s) => s.toastMessage);
   const toastVariant = useUIStore((s) => s.toastVariant);
@@ -256,27 +255,6 @@ export function GraphCanvas() {
     },
     [removeNodes, setSelectedNodeId],
   );
-
-  // Escape key handling for stamp mode
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key !== "Escape") return;
-      const target = event.target as HTMLElement;
-      if (
-        target.tagName === "INPUT" ||
-        target.tagName === "TEXTAREA" ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-      if (stampNodeType) {
-        setStampNodeType(null);
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [stampNodeType, setStampNodeType]);
 
   // Auto-dismiss toast after 3 seconds
   useEffect(() => {
