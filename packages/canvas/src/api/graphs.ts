@@ -42,7 +42,7 @@ export async function listGraphs(): Promise<GraphSchema[]> {
 }
 
 export async function getGraph(id: string): Promise<GraphSchema> {
-  const res = await request<GraphResponse>(`/graphs/${id}`);
+  const res = await request<GraphResponse>(`/graphs/${encodeURIComponent(id)}`);
   return toGraphSchema(res);
 }
 
@@ -63,16 +63,21 @@ export async function updateGraph(
   id: string,
   graph: Partial<Omit<GraphSchema, "id" | "metadata">>,
 ): Promise<GraphSchema> {
-  const res = await request<GraphResponse>(`/graphs/${id}`, {
-    method: "PUT",
-    body: JSON.stringify({
-      name: graph.name,
-      schema_json: graph,
-    }),
-  });
+  const res = await request<GraphResponse>(
+    `/graphs/${encodeURIComponent(id)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        name: graph.name,
+        schema_json: graph,
+      }),
+    },
+  );
   return toGraphSchema(res);
 }
 
 export async function deleteGraph(id: string): Promise<void> {
-  await request<void>(`/graphs/${id}`, { method: "DELETE" });
+  await request<void>(`/graphs/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
