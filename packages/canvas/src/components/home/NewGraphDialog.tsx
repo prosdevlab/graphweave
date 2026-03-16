@@ -4,13 +4,15 @@ import { Button } from "@ui/Button";
 import { Dialog } from "@ui/Dialog";
 import { Input } from "@ui/Input";
 import { memo, useCallback, useState } from "react";
+import { useNavigate } from "react-router";
 
 // Container component — accesses stores directly for dialog state and graph creation
 function NewGraphDialogComponent() {
+  const navigate = useNavigate();
   const open = useUIStore((s) => s.newGraphDialogOpen);
   const setOpen = useUIStore((s) => s.setNewGraphDialogOpen);
-  const setView = useUIStore((s) => s.setView);
   const newGraph = useGraphStore((s) => s.newGraph);
+  const saveGraph = useGraphStore((s) => s.saveGraph);
   const [name, setName] = useState("");
 
   const handleClose = useCallback(() => {
@@ -18,13 +20,15 @@ function NewGraphDialogComponent() {
     setName("");
   }, [setOpen]);
 
-  const handleCreate = useCallback(() => {
+  const handleCreate = useCallback(async () => {
     const graphName = name.trim() || "Untitled Graph";
     newGraph(graphName);
+    await saveGraph();
+    const graphId = useGraphStore.getState().graph?.id;
     setOpen(false);
-    setView("canvas");
     setName("");
-  }, [name, newGraph, setOpen, setView]);
+    if (graphId) navigate(`/graph/${graphId}`);
+  }, [name, newGraph, saveGraph, setOpen, navigate]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

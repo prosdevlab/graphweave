@@ -5,12 +5,15 @@ interface CanvasContextValue {
   selectedNodeId: string | null;
   setSelectedNodeId: (id: string | null) => void;
   reactFlowInstance: ReactFlowInstance | null;
+  stampNodeType: string | null;
+  setStampNodeType: (type: string | null) => void;
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
 
 export function CanvasProvider({ children }: { children: ReactNode }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [stampNodeType, setStampNodeType] = useState<string | null>(null);
   const reactFlowInstance = useReactFlow();
 
   return (
@@ -19,6 +22,8 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         selectedNodeId,
         setSelectedNodeId,
         reactFlowInstance,
+        stampNodeType,
+        setStampNodeType,
       }}
     >
       {children}

@@ -6,6 +6,7 @@ import { Dialog } from "@ui/Dialog";
 import { Input } from "@ui/Input";
 import { Brain, Play, Plus, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { GraphCard } from "./GraphCard";
 import { NewGraphDialog } from "./NewGraphDialog";
 
@@ -20,11 +21,10 @@ export function HomeView() {
   const [renameValue, setRenameValue] = useState("");
   const renameInputRef = useRef<HTMLInputElement>(null);
 
+  const navigate = useNavigate();
   const loadGraphList = useGraphStore((s) => s.loadGraphList);
-  const loadGraph = useGraphStore((s) => s.loadGraph);
   const deleteGraphById = useGraphStore((s) => s.deleteGraphById);
   const renameGraphById = useGraphStore((s) => s.renameGraphById);
-  const setView = useUIStore((s) => s.setView);
   const setNewGraphDialogOpen = useUIStore((s) => s.setNewGraphDialogOpen);
 
   useEffect(() => {
@@ -35,11 +35,10 @@ export function HomeView() {
   }, [loadGraphList]);
 
   const handleSelectGraph = useCallback(
-    async (id: string) => {
-      await loadGraph(id);
-      setView("canvas");
+    (id: string) => {
+      navigate(`/graph/${id}`);
     },
-    [loadGraph, setView],
+    [navigate],
   );
 
   const handleNewGraph = useCallback(() => {

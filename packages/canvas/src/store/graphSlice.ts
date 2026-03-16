@@ -218,6 +218,7 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
   },
 
   loadGraph: async (id) => {
+    set({ graph: null, saveError: null });
     try {
       const graph = await getGraph(id);
       set({

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CanvasHeader } from "../CanvasHeader";
 
-const mockSetView = vi.fn();
+const mockNavigate = vi.fn();
 const mockSaveGraph = vi.fn();
 const mockRenameGraph = vi.fn();
 
@@ -23,11 +23,8 @@ vi.mock("@store/graphSlice", () => ({
     }),
 }));
 
-vi.mock("@store/uiSlice", () => ({
-  useUIStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      setView: mockSetView,
-    }),
+vi.mock("react-router", () => ({
+  useNavigate: () => mockNavigate,
 }));
 
 beforeEach(() => {
@@ -101,6 +98,13 @@ describe("CanvasHeader", () => {
     render(<CanvasHeader />);
     await userEvent.click(screen.getByLabelText("Back to home"));
     expect(window.confirm).toHaveBeenCalled();
-    expect(mockSetView).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it("clicking back without dirty navigates home", async () => {
+    mockDirty = false;
+    render(<CanvasHeader />);
+    await userEvent.click(screen.getByLabelText("Back to home"));
+    expect(mockNavigate).toHaveBeenCalledWith("/");
   });
 });
