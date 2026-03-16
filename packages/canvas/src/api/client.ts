@@ -19,6 +19,15 @@ function friendlyMessage(status: number, detail: string | null): string {
   }
 }
 
+export class ApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
 const BASE_URL = "/api";
 
 export async function request<T>(
@@ -37,7 +46,10 @@ export async function request<T>(
     const body = await response.json().catch(() => null);
     const detail: string | null =
       typeof body?.detail === "string" ? body.detail : null;
-    throw new Error(friendlyMessage(response.status, detail));
+    throw new ApiError(
+      friendlyMessage(response.status, detail),
+      response.status,
+    );
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
