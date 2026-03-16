@@ -1,6 +1,12 @@
 import type { GraphSchema } from "@shared/schema";
 import { useGraphStore } from "../graphSlice";
 
+vi.mock("@store/uiSlice", () => ({
+  useUIStore: {
+    getState: () => ({ showToast: vi.fn() }),
+  },
+}));
+
 vi.mock("@api/graphs", () => ({
   createGraph: vi.fn(),
   getGraph: vi.fn(),
@@ -102,20 +108,7 @@ describe("graphSlice save/load", () => {
     expect(useGraphStore.getState().saveError).toBeNull();
   });
 
-  it("fallback to create when update returns 'Graph not found'", async () => {
-    vi.mocked(updateGraph).mockRejectedValue(new Error("Graph not found"));
-    vi.mocked(createGraph).mockResolvedValue(mockGraph);
-    useGraphStore.getState().newGraph("Orphan");
-    useGraphStore.setState({ persisted: true });
-    await useGraphStore.getState().saveGraph();
-    expect(updateGraph).toHaveBeenCalled();
-    expect(createGraph).toHaveBeenCalled();
-    expect(useGraphStore.getState().persisted).toBe(true);
-    expect(useGraphStore.getState().dirty).toBe(false);
-    expect(useGraphStore.getState().saveError).toBeNull();
-  });
-
-  it("does not fallback for other errors", async () => {
+  it("saveGraph sets saveError on update failure", async () => {
     vi.mocked(updateGraph).mockRejectedValue(new Error("Network error"));
     useGraphStore.getState().newGraph("Broken");
     useGraphStore.setState({ persisted: true });

@@ -11,6 +11,7 @@ import type {
   NodeSchema,
   StateField,
 } from "@shared/schema";
+import { useUIStore } from "@store/uiSlice";
 import { create } from "zustand";
 
 const DEFAULT_STATE: StateField[] = [
@@ -195,24 +196,9 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
         edges: state.edges,
       };
 
-      let saved: GraphSchema;
-      try {
-        if (state.persisted) {
-          saved = await updateGraph(state.graph.id, schema);
-        } else {
-          saved = await createGraph(schema);
-        }
-      } catch (e) {
-        if (
-          state.persisted &&
-          e instanceof Error &&
-          e.message === "Graph not found"
-        ) {
-          saved = await createGraph(schema);
-        } else {
-          throw e;
-        }
-      }
+      const saved = state.persisted
+        ? await updateGraph(state.graph.id, schema)
+        : await createGraph(schema);
 
       set({
         graph: saved,
@@ -223,10 +209,9 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
         persisted: true,
       });
     } catch (e) {
-      set({
-        saveError: e instanceof Error ? e.message : "Save failed",
-        saving: false,
-      });
+      const message = e instanceof Error ? e.message : "Save failed";
+      set({ saveError: message, saving: false });
+      useUIStore.getState().showToast(message, "error");
     }
   },
 
