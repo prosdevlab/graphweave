@@ -102,6 +102,29 @@ describe("graphSlice save/load", () => {
     expect(useGraphStore.getState().saveError).toBeNull();
   });
 
+  it("fallback to create when update returns 'Graph not found'", async () => {
+    vi.mocked(updateGraph).mockRejectedValue(new Error("Graph not found"));
+    vi.mocked(createGraph).mockResolvedValue(mockGraph);
+    useGraphStore.getState().newGraph("Orphan");
+    useGraphStore.setState({ persisted: true });
+    await useGraphStore.getState().saveGraph();
+    expect(updateGraph).toHaveBeenCalled();
+    expect(createGraph).toHaveBeenCalled();
+    expect(useGraphStore.getState().persisted).toBe(true);
+    expect(useGraphStore.getState().dirty).toBe(false);
+    expect(useGraphStore.getState().saveError).toBeNull();
+  });
+
+  it("does not fallback for other errors", async () => {
+    vi.mocked(updateGraph).mockRejectedValue(new Error("Network error"));
+    useGraphStore.getState().newGraph("Broken");
+    useGraphStore.setState({ persisted: true });
+    await useGraphStore.getState().saveGraph();
+    expect(updateGraph).toHaveBeenCalled();
+    expect(createGraph).not.toHaveBeenCalled();
+    expect(useGraphStore.getState().saveError).toBe("Network error");
+  });
+
   it("loadGraph loads graph from API and sets store state", async () => {
     vi.mocked(getGraph).mockResolvedValue(mockGraph);
     await useGraphStore.getState().loadGraph("g1");

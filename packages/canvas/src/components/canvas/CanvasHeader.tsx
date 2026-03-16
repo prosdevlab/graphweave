@@ -1,5 +1,4 @@
 import { useGraphStore } from "@store/graphSlice";
-import { useUIStore } from "@store/uiSlice";
 import { Button } from "@ui/Button";
 import { Toast } from "@ui/Toast";
 import { ChevronLeft, Pencil, Save } from "lucide-react";
@@ -11,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router";
 
 function CanvasHeaderComponent() {
   const graph = useGraphStore((s) => s.graph);
@@ -19,7 +19,7 @@ function CanvasHeaderComponent() {
   const saveError = useGraphStore((s) => s.saveError);
   const saveGraph = useGraphStore((s) => s.saveGraph);
   const renameGraph = useGraphStore((s) => s.renameGraph);
-  const setView = useUIStore((s) => s.setView);
+  const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -36,8 +36,8 @@ function CanvasHeaderComponent() {
     if (dirty && !window.confirm("You have unsaved changes. Leave anyway?")) {
       return;
     }
-    setView("home");
-  }, [dirty, setView]);
+    navigate("/");
+  }, [dirty, navigate]);
 
   const handleNameClick = useCallback(() => {
     setEditing(true);
@@ -132,6 +132,7 @@ function CanvasHeaderComponent() {
         <Toast
           message={toastMessage}
           variant="error"
+          duration={0}
           onDismiss={() => setToastMessage(null)}
         />
       )}

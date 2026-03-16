@@ -786,3 +786,11 @@ feat(canvas): add home view, save/load, editable graph name, and app flow
 | `formatTimeAgo` shows wrong relative time | Visual check in dev server | Simple implementation covers common cases. Edge cases (timezone, DST) acceptable for C1. |
 | Graph list doesn't update after save | Stale list on home screen | List re-fetches on mount (useEffect). Going home→canvas→home refetches. |
 | Inline name edit doesn't auto-focus | User has to click twice | `setTimeout(() => inputRef.current?.select(), 0)` handles the timing |
+
+---
+
+## Implementation Deviation: React Router v7 replaces state-driven navigation
+
+**Date:** 2026-03-16
+
+The `currentView`/`setView` pattern in `uiSlice` was replaced with React Router v7 (library mode). Routes: `/` → HomeView, `/graph/:id` → CanvasRoute, `*` → redirect to `/`. The `AppView` type, `currentView` state, and `setView` action were removed from `uiSlice`. Navigation call sites now use `useNavigate()` and `useParams()` from react-router. A new `CanvasRoute` component handles URL-param graph loading with loading/error states. This was originally deferred to C6 (overview decision #9) but pulled forward for shareable URLs, browser back/forward, and nested route readiness.

@@ -5,7 +5,9 @@ describe("CanvasHint", () => {
   it("renders hint text when nodeCount <= 2", () => {
     render(<CanvasHint nodeCount={2} />);
     expect(
-      screen.getByText("Drag nodes from the toolbar to build your graph"),
+      screen.getByText(
+        "Click a node in the toolbar, then click to place — or drag it onto the canvas",
+      ),
     ).toBeInTheDocument();
   });
 

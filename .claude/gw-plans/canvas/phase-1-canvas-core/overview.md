@@ -454,7 +454,7 @@ packages/canvas/src/
 | 6 | **Minimal shadcn-style UI components** | Full shadcn install; Headless UI; raw HTML | Copy-owned per CLAUDE.md. Only 4 components needed for C1. No dependency, no bundle bloat. |
 | 7 | **graphSlice as single Zustand store (not split)** | Separate stores per concern | graphSlice already exists. Adding actions to it is simpler than splitting. The store is small -- splitting adds import complexity without performance benefit at this scale. |
 | 8 | **Drag from toolbar to canvas (not click-to-add)** | Click toolbar button to add at center; right-click menu | Drag-to-drop is the standard React Flow pattern. `onDrop` + `screenToFlowPosition` is well-documented. Click-to-add can be added later as a shortcut. |
-| 9 | **Home view with simple view routing (no React Router)** | React Router; always-canvas with dropdown graph picker | Home view gives a clear entry point and graph overview. View routing via uiSlice state is simpler than React Router for 2 views. Router can be added in C6 if URL-based navigation is needed. |
+| 9 | **Home view with React Router v7 URL routing** | React Router; always-canvas with dropdown graph picker | Originally deferred to C6 as simple state-driven routing. Pulled forward because shareable `/graph/:id` URLs, browser back/forward, and nested route support (run history, settings) were needed sooner. React Router v7 library mode — no loaders/actions, data stays in Zustand. |
 | 10 | **Starter template (Start+End pre-placed)** | Blank canvas; full template with LLM node | Start+End are always required. Pre-placing them removes a mandatory step. Including LLM would be opinionated -- let the user choose what goes between. |
 | 11 | **Editable graph name in header** | Separate rename dialog; settings page | Inline editing is the most natural UX -- click text, type, done. No extra modals for a simple rename. |
 | 12 | **Connection validation via isValidConnection** | No validation; validate on save | Immediate feedback prevents bad graphs. Matches US-7. RF's `isValidConnection` is the standard hook for this. |
@@ -470,6 +470,7 @@ packages/canvas/src/
 | 1.3 | [phase-1.3-graph-canvas.md](phase-1.3-graph-canvas.md) | 1 | GraphCanvas container, Toolbar with tooltips, connection validation, canvas hint, starter template, graphSlice extensions |
 | 1.4 | [phase-1.4-config-panel.md](phase-1.4-config-panel.md) | 1 | NodeConfigPanel with slide transition + config forms + graphSlice.updateNodeConfig |
 | 1.5 | [phase-1.5-save-load.md](phase-1.5-save-load.md) | 1 | HomeView, GraphCard, NewGraphDialog, editable graph name, save/load, view routing, App rewrite |
+| 1.6 | [phase-1.6-floating-toolbar.md](phase-1.6-floating-toolbar.md) | 2 | Floating toolbar with stamp mode, replaces sidebar toolbar |
 
 Each part produces an independently buildable and typecheckable codebase. Parts 1.1-1.2
 can be demoed in Storybook-like isolation. Part 1.3 produces a working canvas (add nodes,

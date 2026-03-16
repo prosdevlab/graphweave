@@ -22,3 +22,4 @@ React 19 + React Flow frontend phases. Depends on execution phases 3-4 for API s
 | 1.3 | [phase-1.3-graph-canvas.md](phase-1-canvas-core/phase-1.3-graph-canvas.md) | GraphCanvas container, Toolbar with tooltips, connection validation, canvas hint, starter template | Not started |
 | 1.4 | [phase-1.4-config-panel.md](phase-1-canvas-core/phase-1.4-config-panel.md) | NodeConfigPanel with slide transition + config forms | Not started |
 | 1.5 | [phase-1.5-save-load.md](phase-1-canvas-core/phase-1.5-save-load.md) | HomeView, GraphCard, NewGraphDialog, editable graph name, save/load, view routing | Not started |
+| 1.6 | [phase-1.6-floating-toolbar.md](phase-1-canvas-core/phase-1.6-floating-toolbar.md) | Floating toolbar with stamp mode, replaces sidebar toolbar | Complete |
