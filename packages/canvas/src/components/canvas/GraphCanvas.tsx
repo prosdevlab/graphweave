@@ -1,6 +1,5 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
-import { SidebarProvider } from "@ui/Sidebar";
 import {
   Background,
   BackgroundVariant,
@@ -23,10 +22,12 @@ import {
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import { useNodeDrop } from "../../hooks/useNodeDrop";
+import { useNodePlacement } from "../../hooks/useNodePlacement";
 import { toRFEdge, toRFNode } from "../../types/mappers";
 import { CanvasHint } from "./CanvasHint";
+import { FloatingToolbar } from "./FloatingToolbar";
 import { SnapConnectionLine } from "./SnapConnectionLine";
-import { Toolbar } from "./Toolbar";
+import { StampGhost } from "./StampGhost";
 import { nodeTypes } from "./nodes/nodeTypes";
 
 // ── Local RF state reducer ──────────────────────────────────────────
@@ -85,9 +86,15 @@ export function GraphCanvas() {
   const removeEdge = useGraphStore((s) => s.removeEdge);
   const removeNodes = useGraphStore((s) => s.removeNodes);
 
-  const { selectedNodeId, setSelectedNodeId, reactFlowInstance } =
-    useCanvasContext();
+  const {
+    selectedNodeId,
+    setSelectedNodeId,
+    reactFlowInstance,
+    stampNodeType,
+    setStampNodeType,
+  } = useCanvasContext();
   const { onDragOver, onDrop } = useNodeDrop(reactFlowInstance);
+  const { placeNode } = useNodePlacement();
 
   // Track the edge being reconnected to distinguish reconnect from new connection
   const reconnectingEdgeRef = useRef<string | null>(null);
@@ -194,7 +201,6 @@ export function GraphCanvas() {
     (oldEdge, newConnection) => {
       reconnectingEdgeRef.current = null;
       if (newConnection.source && newConnection.target) {
-        // Remove old edge, add new one
         removeEdge(oldEdge.id);
         const newEdge = {
           id: `e-${newConnection.source}-${newConnection.target}`,
@@ -209,7 +215,6 @@ export function GraphCanvas() {
 
   const onReconnectEnd = useCallback(
     (_event: MouseEvent | TouchEvent, edge: Edge) => {
-      // If reconnect was cancelled (dropped on empty space), remove the edge
       if (reconnectingEdgeRef.current === edge.id) {
         removeEdge(edge.id);
         reconnectingEdgeRef.current = null;
@@ -225,9 +230,20 @@ export function GraphCanvas() {
     [setSelectedNodeId],
   );
 
-  const onPaneClick = useCallback(() => {
-    setSelectedNodeId(null);
-  }, [setSelectedNodeId]);
+  const onPaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      if (stampNodeType && reactFlowInstance) {
+        const flowPos = reactFlowInstance.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        });
+        placeNode(stampNodeType, flowPos);
+        return;
+      }
+      setSelectedNodeId(null);
+    },
+    [stampNodeType, reactFlowInstance, placeNode, setSelectedNodeId],
+  );
 
   const onNodesDelete: OnNodesDelete = useCallback(
     (deleted) => {
@@ -237,50 +253,64 @@ export function GraphCanvas() {
     [removeNodes, setSelectedNodeId],
   );
 
+  // Escape key handling for stamp mode
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement;
+      if (
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if (stampNodeType) {
+        setStampNodeType(null);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [stampNodeType, setStampNodeType]);
+
   return (
-    <SidebarProvider>
-      <div className="flex h-full w-full">
-        <Toolbar />
-        <div className="relative flex-1">
-          <ReactFlow
-            nodes={rfState.nodes}
-            edges={rfState.edges}
-            nodeTypes={nodeTypes}
-            defaultEdgeOptions={defaultEdgeOptions}
-            connectionMode={ConnectionMode.Strict}
-            connectionLineComponent={SnapConnectionLine}
-            connectionLineStyle={{ strokeWidth: 2, stroke: "#52525b" }}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onReconnectStart={onReconnectStart}
-            onReconnect={onReconnect}
-            onReconnectEnd={onReconnectEnd}
-            onNodeClick={onNodeClick}
-            onPaneClick={onPaneClick}
-            onNodesDelete={onNodesDelete}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            isValidConnection={isValidConnection}
-            fitView
-            deleteKeyCode="Delete"
-            className="bg-zinc-950"
-          >
-            <Background
-              variant={BackgroundVariant.Dots}
-              color="#3f3f46"
-              gap={20}
-            />
-            <Controls className="!border-zinc-700 !bg-zinc-900" />
-            <MiniMap
-              className="!border-zinc-700 !bg-zinc-900"
-              nodeColor="#3f3f46"
-              maskColor="rgba(0, 0, 0, 0.7)"
-            />
-          </ReactFlow>
-          <CanvasHint nodeCount={storeNodes.length} />
-        </div>
-      </div>
-    </SidebarProvider>
+    <div className="relative h-full w-full">
+      <ReactFlow
+        nodes={rfState.nodes}
+        edges={rfState.edges}
+        nodeTypes={nodeTypes}
+        defaultEdgeOptions={defaultEdgeOptions}
+        connectionMode={ConnectionMode.Strict}
+        connectionLineComponent={SnapConnectionLine}
+        connectionLineStyle={{ strokeWidth: 2, stroke: "#52525b" }}
+        onNodesChange={onNodesChange}
+        onEdgesChange={onEdgesChange}
+        onConnect={onConnect}
+        onReconnectStart={onReconnectStart}
+        onReconnect={onReconnect}
+        onReconnectEnd={onReconnectEnd}
+        onNodeClick={onNodeClick}
+        onPaneClick={onPaneClick}
+        onNodesDelete={onNodesDelete}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+        isValidConnection={isValidConnection}
+        fitView
+        deleteKeyCode="Delete"
+        className={`bg-zinc-950 ${stampNodeType ? "cursor-crosshair" : ""}`}
+      >
+        <Background variant={BackgroundVariant.Dots} color="#3f3f46" gap={20} />
+        <Controls className="!border-zinc-700 !bg-zinc-900" />
+        <MiniMap
+          className="!border-zinc-700 !bg-zinc-900"
+          nodeColor="#3f3f46"
+          maskColor="rgba(0, 0, 0, 0.7)"
+        />
+      </ReactFlow>
+      <FloatingToolbar />
+      <StampGhost />
+      <CanvasHint nodeCount={storeNodes.length} />
+    </div>
   );
 }
