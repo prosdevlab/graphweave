@@ -4,7 +4,6 @@ import { Tooltip } from "@ui/Tooltip";
 import { CircuitBoard, MousePointer2, X } from "lucide-react";
 import {
   type DragEvent,
-  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -195,4 +194,4 @@ function FloatingToolbarComponent() {
   );
 }
 
-export const FloatingToolbar = memo(FloatingToolbarComponent);
+export { FloatingToolbarComponent as FloatingToolbar };

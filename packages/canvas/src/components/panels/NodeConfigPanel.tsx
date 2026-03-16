@@ -1,5 +1,5 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
-import type { NodeSchema } from "@shared/schema";
+import type { LLMNode, NodeSchema } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Button } from "@ui/Button";
 import { Sheet } from "@ui/Sheet";
@@ -67,6 +67,10 @@ export function NodeConfigPanel() {
   );
 }
 
+function isLLMNode(node: NodeSchema): node is LLMNode {
+  return node.type === "llm";
+}
+
 function renderConfigForm(
   node: NodeSchema,
   onChange: (updates: {
@@ -78,17 +82,8 @@ function renderConfigForm(
     case "start":
       return <StartNodeConfig node={node} onChange={onChange} />;
     case "llm":
-      return (
-        <LLMNodeConfig
-          node={
-            node as unknown as {
-              label: string;
-              config: Parameters<typeof LLMNodeConfig>[0]["node"]["config"];
-            }
-          }
-          onChange={onChange}
-        />
-      );
+      if (!isLLMNode(node)) return null;
+      return <LLMNodeConfig node={node} onChange={onChange} />;
     case "end":
       return <EndNodeConfig node={node} onChange={onChange} />;
     default:
