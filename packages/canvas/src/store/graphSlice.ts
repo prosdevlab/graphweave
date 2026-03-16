@@ -60,6 +60,12 @@ export interface GraphSlice {
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
   addEdge: (edge: EdgeSchema) => void;
   removeEdge: (id: string) => void;
+  spliceEdge: (
+    oldEdgeId: string,
+    newNode: NodeSchema,
+    newEdge1: EdgeSchema,
+    newEdge2: EdgeSchema,
+  ) => void;
   removeNodes: (ids: string[]) => void;
   newGraph: (name: string) => void;
   renameGraph: (name: string) => void;
@@ -106,6 +112,13 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
   removeEdge: (id) =>
     set((s) => ({
       edges: s.edges.filter((e) => e.id !== id),
+      dirty: true,
+    })),
+
+  spliceEdge: (oldEdgeId, newNode, newEdge1, newEdge2) =>
+    set((s) => ({
+      nodes: [...s.nodes, newNode],
+      edges: [...s.edges.filter((e) => e.id !== oldEdgeId), newEdge1, newEdge2],
       dirty: true,
     })),
 

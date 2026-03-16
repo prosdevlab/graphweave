@@ -4,19 +4,20 @@ import type { EdgeSchema, NodeSchema } from "@shared/schema";
 let mockNodes: NodeSchema[] = [];
 let mockEdges: EdgeSchema[] = [];
 const mockAddNode = vi.fn();
-const mockAddEdge = vi.fn();
-const mockRemoveEdge = vi.fn();
+const mockSpliceEdge = vi.fn();
 const mockShowToast = vi.fn();
 
 vi.mock("@store/graphSlice", () => ({
-  useGraphStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({
-      nodes: mockNodes,
-      edges: mockEdges,
-      addNode: mockAddNode,
-      addEdge: mockAddEdge,
-      removeEdge: mockRemoveEdge,
-    }),
+  useGraphStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({
+        addNode: mockAddNode,
+        spliceEdge: mockSpliceEdge,
+      }),
+    {
+      getState: () => ({ nodes: mockNodes, edges: mockEdges }),
+    },
+  ),
 }));
 
 vi.mock("@store/uiSlice", () => ({
@@ -38,8 +39,7 @@ describe("useNodePlacement", () => {
     mockNodes = [];
     mockEdges = [];
     mockAddNode.mockClear();
-    mockAddEdge.mockClear();
-    mockRemoveEdge.mockClear();
+    mockSpliceEdge.mockClear();
     mockShowToast.mockClear();
   });
 
@@ -80,7 +80,7 @@ describe("useNodePlacement", () => {
     );
   });
 
-  it("splits nearest edge when placing node near an edge", () => {
+  it("splits nearest edge atomically via spliceEdge", () => {
     mockNodes = [
       {
         id: "n1",
@@ -104,17 +104,12 @@ describe("useNodePlacement", () => {
     const success = result.current.placeNode("llm", { x: 100, y: 5 });
 
     expect(success).toBe(true);
-    expect(mockAddNode).toHaveBeenCalled();
-    expect(mockRemoveEdge).toHaveBeenCalledWith("e-n1-n2");
-    expect(mockAddEdge).toHaveBeenCalledTimes(2);
-    expect(mockAddEdge).toHaveBeenCalledWith(
+    expect(mockAddNode).not.toHaveBeenCalled();
+    expect(mockSpliceEdge).toHaveBeenCalledWith(
+      "e-n1-n2",
+      expect.objectContaining({ id: "test-uuid-1234", type: "llm" }),
       expect.objectContaining({ source: "n1", target: "test-uuid-1234" }),
-    );
-    expect(mockAddEdge).toHaveBeenCalledWith(
-      expect.objectContaining({
-        source: "test-uuid-1234",
-        target: "n2",
-      }),
+      expect.objectContaining({ source: "test-uuid-1234", target: "n2" }),
     );
   });
 
