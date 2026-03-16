@@ -2,21 +2,13 @@ import { useUIStore } from "../uiSlice";
 
 beforeEach(() => {
   useUIStore.setState({
-    currentView: "home",
     newGraphDialogOpen: false,
+    toastMessage: null,
+    toastVariant: "info",
   });
 });
 
 describe("uiSlice", () => {
-  it('initial currentView is "home"', () => {
-    expect(useUIStore.getState().currentView).toBe("home");
-  });
-
-  it("setView changes currentView", () => {
-    useUIStore.getState().setView("canvas");
-    expect(useUIStore.getState().currentView).toBe("canvas");
-  });
-
   it("initial newGraphDialogOpen is false", () => {
     expect(useUIStore.getState().newGraphDialogOpen).toBe(false);
   });
@@ -26,5 +18,23 @@ describe("uiSlice", () => {
     expect(useUIStore.getState().newGraphDialogOpen).toBe(true);
     useUIStore.getState().setNewGraphDialogOpen(false);
     expect(useUIStore.getState().newGraphDialogOpen).toBe(false);
+  });
+
+  it("showToast sets message and default variant", () => {
+    useUIStore.getState().showToast("Hello");
+    expect(useUIStore.getState().toastMessage).toBe("Hello");
+    expect(useUIStore.getState().toastVariant).toBe("info");
+  });
+
+  it("showToast sets message with custom variant", () => {
+    useUIStore.getState().showToast("Oops", "error");
+    expect(useUIStore.getState().toastMessage).toBe("Oops");
+    expect(useUIStore.getState().toastVariant).toBe("error");
+  });
+
+  it("dismissToast clears the message", () => {
+    useUIStore.getState().showToast("Hello");
+    useUIStore.getState().dismissToast();
+    expect(useUIStore.getState().toastMessage).toBeNull();
   });
 });

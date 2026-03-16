@@ -1,12 +1,30 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
+import { useGraphStore } from "@store/graphSlice";
 import { Tooltip } from "@ui/Tooltip";
 import { CircuitBoard, MousePointer2, X } from "lucide-react";
-import { type DragEvent, memo, useCallback, useEffect, useState } from "react";
+import {
+  type DragEvent,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { TOOLBAR_ITEMS } from "../../constants/toolbarItems";
+import { SINGLETON_TYPES } from "../../utils/nodeDefaults";
 
 function FloatingToolbarComponent() {
   const { stampNodeType, setStampNodeType } = useCanvasContext();
+  const nodes = useGraphStore((s) => s.nodes);
   const [expanded, setExpanded] = useState(stampNodeType !== null);
+
+  const disabledTypes = useMemo(() => {
+    const disabled = new Set<string>();
+    for (const n of nodes) {
+      if (SINGLETON_TYPES.has(n.type)) disabled.add(n.type);
+    }
+    return disabled;
+  }, [nodes]);
 
   const handlePointerClick = useCallback(() => {
     setStampNodeType(null);
@@ -104,20 +122,37 @@ function FloatingToolbarComponent() {
             {/* Node type buttons */}
             {TOOLBAR_ITEMS.map((item) => {
               const isActive = stampNodeType === item.type;
+              const isDisabled = disabledTypes.has(item.type);
               return (
-                <Tooltip key={item.type} content={item.label} side="right">
+                <Tooltip
+                  key={item.type}
+                  content={isDisabled ? "Already exists" : item.label}
+                  side="right"
+                >
                   <button
                     type="button"
-                    draggable
-                    onClick={() => handleNodeTypeClick(item.type)}
-                    onDragStart={(e) => handleDragStart(e, item.type)}
-                    className={`flex h-9 w-9 cursor-grab items-center justify-center rounded-lg transition-colors active:cursor-grabbing ${
-                      isActive
-                        ? `${item.accentBg} ${item.iconColor}`
-                        : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+                    draggable={!isDisabled}
+                    disabled={isDisabled}
+                    onClick={() =>
+                      !isDisabled && handleNodeTypeClick(item.type)
+                    }
+                    onDragStart={(e) => {
+                      if (isDisabled) {
+                        e.preventDefault();
+                        return;
+                      }
+                      handleDragStart(e, item.type);
+                    }}
+                    className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                      isDisabled
+                        ? "opacity-40 cursor-not-allowed text-zinc-400"
+                        : isActive
+                          ? `${item.accentBg} ${item.iconColor}`
+                          : "cursor-grab text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 active:cursor-grabbing"
                     }`}
                     aria-label={item.label}
                     aria-pressed={isActive}
+                    aria-disabled={isDisabled}
                   >
                     <item.icon size={16} />
                   </button>

@@ -1,5 +1,6 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
+import { useUIStore } from "@store/uiSlice";
 import {
   Background,
   BackgroundVariant,
@@ -93,6 +94,9 @@ export function GraphCanvas() {
     stampNodeType,
     setStampNodeType,
   } = useCanvasContext();
+  const toastMessage = useUIStore((s) => s.toastMessage);
+  const toastVariant = useUIStore((s) => s.toastVariant);
+  const dismissToast = useUIStore((s) => s.dismissToast);
   const { onDragOver, onDrop } = useNodeDrop(reactFlowInstance);
   const { placeNode } = useNodePlacement();
 
@@ -274,6 +278,13 @@ export function GraphCanvas() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [stampNodeType, setStampNodeType]);
 
+  // Auto-dismiss toast after 3 seconds
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timer = setTimeout(dismissToast, 3000);
+    return () => clearTimeout(timer);
+  }, [toastMessage, dismissToast]);
+
   return (
     <div className="relative h-full w-full">
       <ReactFlow
@@ -311,6 +322,20 @@ export function GraphCanvas() {
       <FloatingToolbar />
       <StampGhost />
       <CanvasHint nodeCount={storeNodes.length} />
+      {toastMessage && (
+        <output
+          data-testid="canvas-toast"
+          className={`absolute bottom-6 left-1/2 z-20 -translate-x-1/2 rounded-lg border px-4 py-2 text-sm shadow-lg backdrop-blur-sm ${
+            toastVariant === "error"
+              ? "border-red-800 bg-red-950/90 text-red-200"
+              : toastVariant === "success"
+                ? "border-emerald-800 bg-emerald-950/90 text-emerald-200"
+                : "border-zinc-700 bg-zinc-900/90 text-zinc-200"
+          }`}
+        >
+          {toastMessage}
+        </output>
+      )}
     </div>
   );
 }
