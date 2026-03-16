@@ -16,14 +16,14 @@ import {
  */
 export function useNodePlacement() {
   const addNode = useGraphStore((s) => s.addNode);
-  const addEdge = useGraphStore((s) => s.addEdge);
-  const removeEdge = useGraphStore((s) => s.removeEdge);
-  const nodes = useGraphStore((s) => s.nodes);
-  const edges = useGraphStore((s) => s.edges);
+  const spliceEdge = useGraphStore((s) => s.spliceEdge);
 
   const placeNode = useCallback(
     (nodeType: string, position: { x: number; y: number }): boolean => {
       if (!NODE_DEFAULTS[nodeType]) return false;
+
+      // Read fresh state to avoid stale closures
+      const { nodes, edges } = useGraphStore.getState();
 
       // Prevent duplicate singletons
       if (
@@ -47,25 +47,28 @@ export function useNodePlacement() {
       // Check if placed near an existing edge (drop-on-edge to insert)
       const nearestEdge = findNearestEdge(position, nodes, edges);
 
-      addNode(newNode);
-
       if (nearestEdge) {
-        removeEdge(nearestEdge.id);
-        addEdge({
-          id: `e-${nearestEdge.source}-${newNode.id}`,
-          source: nearestEdge.source,
-          target: newNode.id,
-        });
-        addEdge({
-          id: `e-${newNode.id}-${nearestEdge.target}`,
-          source: newNode.id,
-          target: nearestEdge.target,
-        });
+        spliceEdge(
+          nearestEdge.id,
+          newNode,
+          {
+            id: `e-${nearestEdge.source}-${newNode.id}`,
+            source: nearestEdge.source,
+            target: newNode.id,
+          },
+          {
+            id: `e-${newNode.id}-${nearestEdge.target}`,
+            source: newNode.id,
+            target: nearestEdge.target,
+          },
+        );
+      } else {
+        addNode(newNode);
       }
 
       return true;
     },
-    [addNode, addEdge, removeEdge, nodes, edges],
+    [addNode, spliceEdge],
   );
 
   return { placeNode };
