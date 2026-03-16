@@ -71,6 +71,7 @@ export interface GraphSlice {
   loadGraph: (id: string) => Promise<void>;
   loadGraphList: () => Promise<GraphSchema[]>;
   deleteGraphById: (id: string) => Promise<void>;
+  renameGraphById: (id: string, name: string) => Promise<GraphSchema>;
 }
 
 export const useGraphStore = create<GraphSlice>((set, get) => ({
@@ -182,10 +183,22 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
       };
 
       let saved: GraphSchema;
-      if (state.persisted) {
-        saved = await updateGraph(state.graph.id, schema);
-      } else {
-        saved = await createGraph(schema);
+      try {
+        if (state.persisted) {
+          saved = await updateGraph(state.graph.id, schema);
+        } else {
+          saved = await createGraph(schema);
+        }
+      } catch (e) {
+        if (
+          state.persisted &&
+          e instanceof Error &&
+          e.message === "Graph not found"
+        ) {
+          saved = await createGraph(schema);
+        } else {
+          throw e;
+        }
       }
 
       set({
@@ -228,5 +241,9 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
 
   deleteGraphById: async (id) => {
     await deleteGraph(id);
+  },
+
+  renameGraphById: async (id, name) => {
+    return updateGraph(id, { name });
   },
 }));

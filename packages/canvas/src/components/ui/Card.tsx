@@ -8,7 +8,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
   ({ interactive = false, className = "", children, ...props }, ref) => (
     <div
       ref={ref}
-      className={`rounded-lg border border-zinc-800 bg-zinc-900 ${interactive ? "cursor-pointer transition-colors hover:border-zinc-600 hover:bg-zinc-800/80" : ""} ${className}`}
+      className={`group/card rounded-lg border border-zinc-800 bg-zinc-900 ${interactive ? "cursor-pointer transition-colors hover:border-zinc-600 hover:bg-zinc-800/80" : ""} ${className}`}
       {...props}
     >
       {children}
@@ -23,7 +23,25 @@ export function CardHeader({
   ...props
 }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`px-4 pt-4 ${className}`} {...props}>
+    <div
+      className={`flex items-center justify-between px-4 pt-3 ${className}`}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
+export function CardMedia({
+  className = "",
+  children,
+  ...props
+}: HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={`flex items-center justify-center px-4 py-3 ${className}`}
+      {...props}
+    >
       {children}
     </div>
   );
