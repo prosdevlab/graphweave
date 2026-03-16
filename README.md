@@ -3,7 +3,7 @@
 **Visual LangGraph builder where your graph runs exactly as drawn** — visually compose nodes, edges, and tools, then stream execution in real time.
 
 > [!NOTE]
-> Graphweave is in early development. The scaffold is in place but core features are still being built.
+> Graphweave is in early development. The canvas builder and execution backend are functional, but graph execution (run a graph and stream results) is not yet wired end-to-end.
 
 ## What is this?
 
@@ -14,6 +14,14 @@ Graphweave kills that gap. The canvas **is** the execution. No translation step,
 ### The rule
 
 **What you draw is what runs.** GraphSchema maps 1-to-1 to LangGraph primitives. No abstraction layer between the visual and the execution.
+
+## Current status
+
+| Layer | What works | What's next |
+|-------|-----------|-------------|
+| **Canvas** | Home view, Start/LLM/End nodes, edge wiring, config panel, save/load, floating toolbar | [SSE run panel, full node set →](.claude/gw-plans/canvas/) |
+| **Execution** | API key auth, graph CRUD, tool registry (8 tools), migrations | [Graph run + SSE streaming →](.claude/gw-plans/execution/) |
+| **Shared** | GraphSchema contract, node types, edge types | Condition + HumanInput wiring |
 
 ## Architecture
 

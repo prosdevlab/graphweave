@@ -39,25 +39,45 @@ not reachable from components by design. See architecture.md for tsconfig detail
 
 Biome handles formatting and linting. No ESLint.
 
+## Phase 1 patterns
+
+Patterns that emerged during Canvas Phase 1 — follow these in subsequent phases:
+
+- **`ApiError` class** with `status` property for structured HTTP error handling (`api/client.ts`)
+- **`spliceEdge`** for atomic node-on-edge insertion — removes the old edge and creates two new edges in one store update (`graphSlice.ts`)
+- **`useGraphStore.getState()`** inside callbacks to avoid stale closures from Zustand subscriptions
+- **`useNodePlacement`** hook encapsulating singleton guards + edge splitting for drop/stamp operations
+- **Global toast** via `useUIStore.getState().showToast()` — callable from anywhere (store, hooks, not just components)
+- **`encodeURIComponent(id)`** on all API path params to handle special characters in graph IDs
+
 ## Package structure
 
 ```
 packages/canvas/src/
-├── components/
-│   ├── canvas/       # React Flow nodes, edges, canvas wrapper
-│   ├── panels/       # Sidebar, run panel, settings, debug panel
-│   └── ui/           # shadcn/ui base components
-├── store/
-│   ├── graphSlice.ts # graph CRUD, canvas state
-│   ├── runSlice.ts   # SSE lifecycle, reconnection, run status
-│   └── uiSlice.ts    # dark mode, panel layout, last-opened graph
-│                     # persisted via sdk-core Storage → localStorage
-│                     # never stores credentials
 ├── api/
-│   ├── client.ts     # base fetch wrapper (sdk-core Transport)
+│   ├── client.ts     # base fetch wrapper + ApiError class
 │   ├── graphs.ts     # graph CRUD
-│   └── runs.ts       # run + SSE stream + reconnection
-└── types/            # re-exports from @graphweave/shared
+│   └── runs.ts       # run start + SSE stream (stub — Phase 2)
+├── components/
+│   ├── canvas/       # GraphCanvas, FloatingToolbar, StampGhost, CanvasHint,
+│   │   │               CanvasHeader, SnapConnectionLine, CanvasRoute
+│   │   └── nodes/    # BaseNodeShell, StartNode, LLMNode, EndNode, nodeTypes
+│   ├── home/         # HomeView, GraphCard, NewGraphDialog
+│   ├── panels/       # NodeConfigPanel
+│   │   └── config/   # StartNodeConfig, LLMNodeConfig, EndNodeConfig
+│   └── ui/           # Button, Card, Dialog, DropdownMenu, IconButton,
+│                       Input, Select, Sheet, Textarea, Toast, Tooltip
+├── constants/        # toolbarItems.ts
+├── contexts/         # CanvasContext (selectedNode, stampNodeType, rfInstance)
+├── hooks/            # useNodePlacement, useNodeDrop, useBeforeUnload
+├── store/
+│   ├── graphSlice.ts # graph CRUD, nodes/edges, spliceEdge, save/load
+│   ├── runSlice.ts   # SSE lifecycle (stub — Phase 2)
+│   └── uiSlice.ts    # darkMode, panelLayout, lastOpenedGraphId,
+│                       newGraphDialogOpen, toast (message + variant)
+├── styles/           # tokens.ts (color/spacing design tokens)
+├── types/            # canvas.ts, mappers.ts (NodeSchema ↔ RF Node)
+└── utils/            # nodeDefaults.ts (NODE_DEFAULTS, SINGLETON_TYPES, findNearestEdge)
 ```
 
 ## Zustand store shape
@@ -83,6 +103,15 @@ interface UISlice {
   darkMode: boolean
   panelLayout: "right" | "bottom"
   lastOpenedGraphId: string | null
+  newGraphDialogOpen: boolean
+  toastMessage: string | null
+  toastVariant: "error" | "success" | "info"
+  toggleDarkMode: () => void
+  setPanelLayout: (layout: "right" | "bottom") => void
+  setLastOpenedGraphId: (id: string | null) => void
+  setNewGraphDialogOpen: (open: boolean) => void
+  showToast: (message: string, variant?: ToastVariant) => void
+  dismissToast: () => void
 }
 ```
 
