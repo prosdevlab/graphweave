@@ -167,11 +167,17 @@ async def health() -> dict:
 
 @app.get("/v1/settings/tools", tags=["System"], summary="Tool registry")
 async def get_tools() -> list[dict]:
-    """Return available tools from the registry (names and descriptions only)."""
+    """Return available tools with names, descriptions, and parameters."""
+    from dataclasses import asdict
+
     from app.tools.registry import REGISTRY
 
     return [
-        {"name": tool.name, "description": tool.description}
+        {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": [asdict(p) for p in tool.parameters],
+        }
         for tool in REGISTRY.values()
     ]
 

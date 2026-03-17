@@ -1,6 +1,7 @@
 import { useGraphStore } from "@store/graphSlice";
 import { useRunStore } from "@store/runSlice";
 import { Sheet } from "@ui/Sheet";
+import { Copy } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatDuration } from "../../utils/format";
 import { ResumeForm } from "./ResumeForm";
@@ -12,6 +13,7 @@ export function RunPanel() {
   const runOutput = useRunStore((s) => s.runOutput);
   const durationMs = useRunStore((s) => s.durationMs);
   const errorMessage = useRunStore((s) => s.errorMessage);
+  const errorTitle = useRunStore((s) => s.errorTitle);
   const pausedPrompt = useRunStore((s) => s.pausedPrompt);
   const nodes = useGraphStore((s) => s.nodes);
   const [visible, setVisible] = useState(false);
@@ -83,8 +85,23 @@ export function RunPanel() {
           />
         ))}
         {runStatus === "error" && errorMessage && (
-          <div className="mt-2 rounded border border-red-800 bg-red-950/50 px-3 py-2 text-xs text-red-400">
-            {errorMessage}
+          <div className="mt-2 rounded border border-red-800 bg-red-950/50 p-3">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-xs font-semibold text-red-300">
+                {errorTitle ?? "Run failed"}
+              </span>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard.writeText(errorMessage)}
+                className="rounded p-0.5 text-red-500 hover:text-red-300"
+                aria-label="Copy error message"
+              >
+                <Copy size={11} />
+              </button>
+            </div>
+            <p className="border-l-2 border-red-700 pl-2 font-mono text-[11px] text-red-400">
+              {errorMessage}
+            </p>
           </div>
         )}
         {runStatus === "connection_lost" && (

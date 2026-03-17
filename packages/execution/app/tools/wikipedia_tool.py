@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import wikipediaapi
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 
 _MAX_TEXT_LENGTH = 10_000
 _SEARCH_LIMIT = 5
@@ -15,6 +15,30 @@ _USER_AGENT = "GraphWeave/1.0 (https://github.com/prosdevlab/graphweave)"
 class WikipediaTool(BaseTool):
     name = "wikipedia"
     description = "Search Wikipedia titles or retrieve page content"
+    parameters = [
+        ToolParameter(
+            name="query",
+            type="string",
+            required=False,
+            description="Search query — required for action=search",
+            examples=["artificial intelligence"],
+        ),
+        ToolParameter(
+            name="action",
+            type="string",
+            required=False,
+            description="search or page",
+            default="search",
+            examples=["search", "page"],
+        ),
+        ToolParameter(
+            name="title",
+            type="string",
+            required=False,
+            description="Page title — required for action=page",
+            examples=["Python (programming language)"],
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         action = inputs.get("action", "search")

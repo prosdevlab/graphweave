@@ -33,6 +33,7 @@ export interface RunSlice {
   finalState: unknown | null;
   durationMs: number | null;
   errorMessage: string | null;
+  errorTitle: string | null;
   pausedPrompt: string | null;
 
   startRun: (graphId: string, input?: Record<string, unknown>) => Promise<void>;
@@ -72,6 +73,7 @@ const INITIAL_STATE = {
   finalState: null,
   durationMs: null,
   errorMessage: null,
+  errorTitle: null,
   pausedPrompt: null,
 };
 
@@ -218,6 +220,7 @@ export const useRunStore = create<RunSlice>((set) => ({
               runStatus: "error" as const,
               activeNodeId: event.data.node_id ?? s.activeNodeId,
               errorMessage: event.data.message,
+              errorTitle: event.data.title ?? null,
             };
           }
           return base;

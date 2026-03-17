@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 from app.tools.sandbox import open_sandboxed
 
 _MAX_FILE_SIZE = 1_000_000  # 1 MB
@@ -15,6 +15,15 @@ _SANDBOX_ROOT = os.environ.get("FILE_SANDBOX_ROOT", "/workspace")
 class FileReadTool(BaseTool):
     name = "file_read"
     description = "Read text content from a sandboxed file"
+    parameters = [
+        ToolParameter(
+            name="path",
+            type="string",
+            required=True,
+            description="File path within sandbox",
+            examples=["data/input.txt"],
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         path = inputs.get("path", "")

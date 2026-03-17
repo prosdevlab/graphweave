@@ -4,12 +4,35 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 
 
 class DatetimeTool(BaseTool):
     name = "datetime"
     description = "Get current time, format, or parse dates"
+    parameters = [
+        ToolParameter(
+            name="action",
+            type="string",
+            required=True,
+            description="Action: now, format, or parse",
+            examples=["now", "format", "parse"],
+        ),
+        ToolParameter(
+            name="date",
+            type="string",
+            required=False,
+            description="ISO date string for format/parse",
+            examples=["2026-01-15T10:30:00Z"],
+        ),
+        ToolParameter(
+            name="fmt",
+            type="string",
+            required=False,
+            description="strftime format string",
+            examples=["%Y-%m-%d", "%B %d, %Y"],
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         action = inputs.get("action", "")

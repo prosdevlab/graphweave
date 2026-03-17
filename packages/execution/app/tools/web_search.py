@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 
 _MAX_RESULTS = 10
 
@@ -12,6 +12,22 @@ _MAX_RESULTS = 10
 class WebSearchTool(BaseTool):
     name = "web_search"
     description = "Search the web and return results with titles, URLs, and snippets"
+    parameters = [
+        ToolParameter(
+            name="query",
+            type="string",
+            required=True,
+            description="Search query",
+            examples=["latest AI news"],
+        ),
+        ToolParameter(
+            name="max_results",
+            type="number",
+            required=False,
+            description="Maximum number of results to return",
+            default="5",
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         query = inputs.get("query", "").strip()
