@@ -140,6 +140,8 @@ export function GraphCanvas() {
       if (sourceNode.type === "end") return false;
       // Allow duplicate during reconnect (same edge being moved)
       if (reconnectingEdgeRef.current) return true;
+      // Condition nodes can have multiple edges to the same target (different branches)
+      if (sourceNode.type === "condition") return true;
       const duplicate = storeEdges.some(
         (e) => e.source === connection.source && e.target === connection.target,
       );
@@ -179,15 +181,35 @@ export function GraphCanvas() {
 
   const onConnect: OnConnect = useCallback(
     (connection) => {
-      if (connection.source && connection.target) {
-        const edge = {
-          id: `e-${connection.source}-${connection.target}`,
-          source: connection.source,
-          target: connection.target,
-        };
-        dispatch({ type: "ADD_EDGE", edge });
-        addEdge(edge);
+      if (!connection.source || !connection.target) return;
+      const { nodes: storeNodesNow, edges: currentEdges } =
+        useGraphStore.getState();
+      const sourceNode = storeNodesNow.find((n) => n.id === connection.source);
+      const isCondition = sourceNode?.type === "condition";
+
+      let condition_branch: string | undefined;
+      if (isCondition) {
+        const existing = currentEdges
+          .filter(
+            (e): e is typeof e & { condition_branch: string } =>
+              e.source === connection.source && !!e.condition_branch,
+          )
+          .map((e) => e.condition_branch);
+        const maxN = existing.reduce((max, name) => {
+          const m = name.match(/^branch_(\d+)$/);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        condition_branch = `branch_${maxN + 1}`;
       }
+
+      const edge = {
+        id: crypto.randomUUID(),
+        source: connection.source,
+        target: connection.target,
+        ...(condition_branch ? { condition_branch } : {}),
+      };
+      dispatch({ type: "ADD_EDGE", edge });
+      addEdge(edge);
     },
     [addEdge],
   );
@@ -203,15 +225,44 @@ export function GraphCanvas() {
   const onReconnect: OnReconnect = useCallback(
     (oldEdge, newConnection) => {
       reconnectingEdgeRef.current = null;
-      if (newConnection.source && newConnection.target) {
-        removeEdge(oldEdge.id);
-        const newEdge = {
-          id: `e-${newConnection.source}-${newConnection.target}`,
-          source: newConnection.source,
-          target: newConnection.target,
-        };
-        addEdge(newEdge);
+      if (!newConnection.source || !newConnection.target) return;
+
+      const { nodes: storeNodesNow, edges: currentEdges } =
+        useGraphStore.getState();
+
+      // Preserve condition_branch from old edge
+      const oldStoreEdge = currentEdges.find((e) => e.id === oldEdge.id);
+      let condition_branch = oldStoreEdge?.condition_branch;
+
+      // If source changed, re-evaluate branch assignment
+      if (newConnection.source !== oldEdge.source) {
+        const newSourceNode = storeNodesNow.find(
+          (n) => n.id === newConnection.source,
+        );
+        if (newSourceNode?.type === "condition") {
+          const existing = currentEdges
+            .filter(
+              (e): e is typeof e & { condition_branch: string } =>
+                e.source === newConnection.source && !!e.condition_branch,
+            )
+            .map((e) => e.condition_branch);
+          const maxN = existing.reduce((max, name) => {
+            const m = name.match(/^branch_(\d+)$/);
+            return m ? Math.max(max, Number(m[1])) : max;
+          }, 0);
+          condition_branch = `branch_${maxN + 1}`;
+        } else {
+          condition_branch = undefined;
+        }
       }
+
+      removeEdge(oldEdge.id);
+      addEdge({
+        id: crypto.randomUUID(),
+        source: newConnection.source,
+        target: newConnection.target,
+        ...(condition_branch ? { condition_branch } : {}),
+      });
     },
     [removeEdge, addEdge],
   );

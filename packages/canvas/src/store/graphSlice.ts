@@ -61,6 +61,7 @@ export interface GraphSlice {
   updateNodePosition: (id: string, position: { x: number; y: number }) => void;
   addEdge: (edge: EdgeSchema) => void;
   removeEdge: (id: string) => void;
+  updateEdge: (id: string, updates: Partial<EdgeSchema>) => void;
   spliceEdge: (
     oldEdgeId: string,
     newNode: NodeSchema,
@@ -113,6 +114,12 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
   removeEdge: (id) =>
     set((s) => ({
       edges: s.edges.filter((e) => e.id !== id),
+      dirty: true,
+    })),
+
+  updateEdge: (id, updates) =>
+    set((s) => ({
+      edges: s.edges.map((e) => (e.id === id ? { ...e, ...updates } : e)),
       dirty: true,
     })),
 
@@ -187,12 +194,26 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
 
     set({ saving: true, saveError: null });
     try {
+      // Derive config.branches for condition nodes from their outgoing edges
+      const syncedNodes = state.nodes.map((node) => {
+        if (node.type !== "condition") return node;
+        const outEdges = state.edges.filter(
+          (e): e is typeof e & { condition_branch: string } =>
+            e.source === node.id && !!e.condition_branch,
+        );
+        const branches: Record<string, string> = {};
+        for (const e of outEdges) {
+          branches[e.condition_branch] = e.target;
+        }
+        return { ...node, config: { ...node.config, branches } };
+      });
+
       const schema: Omit<GraphSchema, "id" | "metadata"> = {
         name: state.graph.name,
         description: state.graph.description,
         version: state.graph.version,
         state: state.graph.state,
-        nodes: state.nodes,
+        nodes: syncedNodes as typeof state.nodes,
         edges: state.edges,
       };
 

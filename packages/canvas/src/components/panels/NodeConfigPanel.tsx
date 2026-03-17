@@ -1,10 +1,16 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
-import type { LLMNode, NodeSchema, ToolNode } from "@shared/schema";
+import type {
+  ConditionNode,
+  LLMNode,
+  NodeSchema,
+  ToolNode,
+} from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Button } from "@ui/Button";
 import { Sheet } from "@ui/Sheet";
 import { Trash2 } from "lucide-react";
 import { useCallback, useMemo } from "react";
+import { ConditionNodeConfig } from "./config/ConditionNodeConfig";
 import { EndNodeConfig } from "./config/EndNodeConfig";
 import { LLMNodeConfig } from "./config/LLMNodeConfig";
 import { StartNodeConfig } from "./config/StartNodeConfig";
@@ -76,6 +82,10 @@ function isToolNode(node: NodeSchema): node is ToolNode {
   return node.type === "tool";
 }
 
+function isConditionNode(node: NodeSchema): node is ConditionNode {
+  return node.type === "condition";
+}
+
 function renderConfigForm(
   node: NodeSchema,
   onChange: (updates: {
@@ -92,6 +102,9 @@ function renderConfigForm(
     case "tool":
       if (!isToolNode(node)) return null;
       return <ToolNodeConfig node={node} onChange={onChange} />;
+    case "condition":
+      if (!isConditionNode(node)) return null;
+      return <ConditionNodeConfig node={node} onChange={onChange} />;
     case "end":
       return <EndNodeConfig node={node} onChange={onChange} />;
     default:
