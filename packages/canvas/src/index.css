@@ -18,6 +18,15 @@
 .gw-node-llm {
   @apply border-indigo-500;
 }
+.gw-node-tool {
+  @apply border-amber-500;
+}
+.gw-node-condition {
+  @apply border-violet-500;
+}
+.gw-node-human_input {
+  @apply border-cyan-500;
+}
 .gw-node-end {
   @apply border-red-500;
 }

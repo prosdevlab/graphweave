@@ -1,5 +1,12 @@
 import type { LucideIcon } from "lucide-react";
-import { Brain, Play, Square } from "lucide-react";
+import {
+  Brain,
+  GitBranch,
+  Play,
+  Square,
+  UserCircle,
+  Wrench,
+} from "lucide-react";
 
 export interface ToolbarItem {
   type: string;
@@ -29,6 +36,33 @@ export const TOOLBAR_ITEMS: ToolbarItem[] = [
     accentBorder: "border-l-indigo-500",
     iconColor: "text-indigo-400",
     accentBg: "bg-indigo-500/20",
+  },
+  {
+    type: "tool",
+    label: "Tool",
+    description: "Call a tool from the registry",
+    icon: Wrench,
+    accentBorder: "border-l-amber-500",
+    iconColor: "text-amber-400",
+    accentBg: "bg-amber-500/20",
+  },
+  {
+    type: "condition",
+    label: "Condition",
+    description: "Branch based on a condition",
+    icon: GitBranch,
+    accentBorder: "border-l-violet-500",
+    iconColor: "text-violet-400",
+    accentBg: "bg-violet-500/20",
+  },
+  {
+    type: "human_input",
+    label: "Human Input",
+    description: "Pause and wait for user input",
+    icon: UserCircle,
+    accentBorder: "border-l-cyan-500",
+    iconColor: "text-cyan-400",
+    accentBg: "bg-cyan-500/20",
   },
   {
     type: "end",
