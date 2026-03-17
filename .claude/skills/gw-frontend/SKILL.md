@@ -57,13 +57,14 @@ packages/canvas/src/
 ├── api/
 │   ├── client.ts     # base fetch wrapper + ApiError class
 │   ├── graphs.ts     # graph CRUD
-│   └── runs.ts       # run start + SSE stream (stub — Phase 2)
+│   └── runs.ts       # run start/cancel/resume + SSE stream
 ├── components/
 │   ├── canvas/       # GraphCanvas, FloatingToolbar, StampGhost, CanvasHint,
-│   │   │               CanvasHeader, SnapConnectionLine, CanvasRoute
+│   │   │               CanvasHeader, SnapConnectionLine, CanvasRoute,
+│   │   │               RunButton, RunInputDialog
 │   │   └── nodes/    # BaseNodeShell, StartNode, LLMNode, EndNode, nodeTypes
 │   ├── home/         # HomeView, GraphCard, NewGraphDialog
-│   ├── panels/       # NodeConfigPanel
+│   ├── panels/       # NodeConfigPanel, RunPanel, RunEventItem, ResumeForm
 │   │   └── config/   # StartNodeConfig, LLMNodeConfig, EndNodeConfig
 │   └── ui/           # Button, Card, Dialog, DropdownMenu, IconButton,
 │                       Input, Select, Sheet, Textarea, Toast, Tooltip
@@ -72,7 +73,7 @@ packages/canvas/src/
 ├── hooks/            # useNodePlacement, useNodeDrop, useBeforeUnload
 ├── store/
 │   ├── graphSlice.ts # graph CRUD, nodes/edges, spliceEdge, save/load
-│   ├── runSlice.ts   # SSE lifecycle (stub — Phase 2)
+│   ├── runSlice.ts   # SSE lifecycle, reconnection, start/cancel/resume
 │   └── uiSlice.ts    # darkMode, panelLayout, lastOpenedGraphId,
 │                       newGraphDialogOpen, toast (message + variant)
 ├── styles/           # tokens.ts (color/spacing design tokens)
@@ -89,13 +90,17 @@ interface RunSlice {
   runStatus: "idle" | "running" | "paused" | "reconnecting"
             | "completed" | "error" | "connection_lost"
   activeNodeId: string | null
-  stateHistory: unknown[]
   runOutput: GraphEvent[]
   reconnectAttempts: number
-  startRun: (input: unknown) => Promise<void>
-  resumeRun: (input: string) => Promise<void>
-  cancelRun: () => void
-  handleConnectionLost: () => void
+  lastEventId: number
+  finalState: unknown | null
+  durationMs: number | null
+  errorMessage: string | null
+  pausedPrompt: string | null
+  startRun: (graphId: string, input?: Record<string, unknown>) => Promise<void>
+  cancelRun: () => Promise<void>
+  resumeRun: (input: unknown) => Promise<void>
+  resetRun: () => void
 }
 
 // uiSlice.ts — UI preferences only, no credentials
@@ -149,6 +154,16 @@ POST /resume                      POST /resume
 `resumeRun()` in runSlice must open the new SSE connection before the
 POST /resume call returns. The server has a 2-second timeout — if no SSE
 arrives, execution continues anyway (events stored in run history).
+
+## Phase 2 patterns
+
+Patterns from Canvas Phase 2 — follow these in subsequent phases:
+
+- **`NodeMapEntry`** — `RunPanel` builds a `Map<string, { label, type, config }>` from graph nodes and passes it to `RunEventItem` for UUID→label resolution
+- **Iterative reconnection** — `_handleStreamError` uses a for-loop (not recursion) with exponential backoff, wrapped in `.catch()` to guarantee landing in a terminal state
+- **`terminalReceived` guard** — module-level flag set before disconnecting on terminal events, prevents `onerror` → reconnection race after `graph_completed`
+- **Output truncation** — `RunEventItem` caps output display at 2000 chars to prevent DOM bloat from large LLM responses
+- **Dialog state reset** — `RunInputDialog` resets form state via `useEffect` when `open` transitions to `true`
 
 ## Settings panel — read-only, no key input
 

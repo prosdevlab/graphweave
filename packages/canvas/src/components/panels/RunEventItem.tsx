@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { formatDuration, formatTime } from "../../utils/format";
 
+const MAX_OUTPUT_LENGTH = 2000;
+
 export interface NodeMapEntry {
   label: string;
   type: string;
@@ -69,11 +71,15 @@ export function RunEventItem({
       const label = resolveLabel(event.data.node_id, nodeMap);
       const entry = nodeMap?.get(event.data.node_id);
       const output = event.data.output as Record<string, unknown> | null;
-      const outputText = output
+      const rawOutput = output
         ? Object.values(output)
             .map((v) => (typeof v === "string" ? v : JSON.stringify(v)))
             .join("\n")
         : null;
+      const outputTruncated = rawOutput && rawOutput.length > MAX_OUTPUT_LENGTH;
+      const outputText = outputTruncated
+        ? `${rawOutput.slice(0, MAX_OUTPUT_LENGTH)}…`
+        : rawOutput;
 
       const showProviderModel: boolean =
         entry?.type === "llm" &&

@@ -1,6 +1,6 @@
 import { Button } from "@ui/Button";
 import { Dialog } from "@ui/Dialog";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface RunInputDialogProps {
   open: boolean;
@@ -15,6 +15,14 @@ export function RunInputDialog({
 }: RunInputDialogProps) {
   const [value, setValue] = useState("{}");
   const [parseError, setParseError] = useState<string | null>(null);
+
+  // Reset to clean state when dialog opens
+  useEffect(() => {
+    if (open) {
+      setValue("{}");
+      setParseError(null);
+    }
+  }, [open]);
 
   const handleSubmit = () => {
     try {
