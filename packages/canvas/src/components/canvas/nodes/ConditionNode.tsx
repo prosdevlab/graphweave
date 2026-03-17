@@ -10,7 +10,7 @@ interface ConditionNodeData {
       type: string;
       [key: string]: unknown;
     };
-    branches: string[];
+    branches: Record<string, string>;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -20,6 +20,7 @@ type ConditionNodeProps = NodeProps<Node<ConditionNodeData>>;
 
 function ConditionNodeComponent({ data, selected }: ConditionNodeProps) {
   const conditionType = data.config.condition?.type ?? "";
+  const branchCount = Object.keys(data.config.branches ?? {}).length;
 
   return (
     <BaseNodeShell
@@ -34,6 +35,11 @@ function ConditionNodeComponent({ data, selected }: ConditionNodeProps) {
           <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] uppercase">
             {conditionType.replace(/_/g, " ")}
           </span>
+          {branchCount > 0 && (
+            <span className="text-[10px]">
+              {branchCount} {branchCount === 1 ? "branch" : "branches"}
+            </span>
+          )}
         </div>
       )}
     </BaseNodeShell>

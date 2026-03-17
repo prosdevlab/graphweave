@@ -52,14 +52,19 @@ export function useNodePlacement() {
           nearestEdge.id,
           newNode,
           {
-            id: `e-${nearestEdge.source}-${newNode.id}`,
+            id: crypto.randomUUID(),
             source: nearestEdge.source,
             target: newNode.id,
+            // Preserve condition_branch on first segment (source → inserted node)
+            ...(nearestEdge.condition_branch
+              ? { condition_branch: nearestEdge.condition_branch }
+              : {}),
           },
           {
-            id: `e-${newNode.id}-${nearestEdge.target}`,
+            id: crypto.randomUUID(),
             source: newNode.id,
             target: nearestEdge.target,
+            // No condition_branch on second segment — inserted node is not condition
           },
         );
       } else {
