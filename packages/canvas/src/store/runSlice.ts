@@ -43,7 +43,7 @@ export interface RunSlice {
   /** @internal — called by SSE event handlers */
   _handleEvent: (event: GraphEvent, eventId: number | null) => void;
   /** @internal — called on SSE connection error */
-  _handleStreamError: (error: Error) => void;
+  _handleStreamError: (error: Error) => void | Promise<void>;
   /** @internal — close the current SSE connection */
   _disconnect: () => void;
 }
@@ -228,7 +228,7 @@ export const useRunStore = create<RunSlice>((set) => ({
     });
   },
 
-  _handleStreamError: async (_error) => {
+  _handleStreamError: (_error) => {
     if (terminalReceived) return;
     if (reconnecting) return;
 
@@ -239,75 +239,95 @@ export const useRunStore = create<RunSlice>((set) => ({
     }
     if (!state.activeRunId) return;
 
-    const attempt = state.reconnectAttempts + 1;
-    if (attempt > MAX_RECONNECT_ATTEMPTS) {
+    const runId = state.activeRunId;
+    reconnecting = true;
+
+    // Iterative reconnection loop with exponential backoff
+    (async () => {
+      for (
+        let attempt = state.reconnectAttempts + 1;
+        attempt <= MAX_RECONNECT_ATTEMPTS;
+        attempt++
+      ) {
+        // Bail if the run was cancelled/reset while we were waiting
+        if (terminalReceived || !reconnecting) return;
+
+        set({ runStatus: "reconnecting", reconnectAttempts: attempt });
+
+        // Exponential backoff: 1s, 2s, 4s
+        await sleep(1000 * 2 ** (attempt - 1));
+
+        // Re-check after sleep — run may have been cancelled/reset
+        if (terminalReceived || !reconnecting) return;
+
+        try {
+          const status = await getRunStatus(runId);
+
+          // Run was cancelled/reset during the fetch
+          if (terminalReceived || !reconnecting) return;
+
+          switch (status.status) {
+            case "completed":
+              reconnecting = false;
+              set({
+                runStatus: "completed",
+                finalState: status.final_state,
+                durationMs: status.duration_ms,
+                activeNodeId: null,
+              });
+              return;
+
+            case "running": {
+              reconnecting = false;
+              const { _handleEvent, _handleStreamError, lastEventId } =
+                useRunStore.getState();
+              cleanup = connectStream(
+                runId,
+                { onEvent: _handleEvent, onError: _handleStreamError },
+                lastEventId,
+              );
+              set({ runStatus: "running", reconnectAttempts: 0 });
+              return;
+            }
+
+            case "paused":
+              reconnecting = false;
+              set({
+                runStatus: "paused",
+                activeNodeId: status.node_id,
+                pausedPrompt: status.prompt,
+              });
+              return;
+
+            case "error":
+              reconnecting = false;
+              set({
+                runStatus: "error",
+                errorMessage: status.error ?? "Run failed on server",
+                activeNodeId: null,
+              });
+              return;
+          }
+        } catch {
+          // Status check failed — continue to next attempt
+        }
+      }
+
+      // All attempts exhausted
       reconnecting = false;
       set({
         runStatus: "connection_lost",
         errorMessage: "Connection lost after 3 attempts",
       });
       showToast("Connection lost — run may still be executing on the server");
-      return;
-    }
-
-    reconnecting = true;
-    set({ runStatus: "reconnecting", reconnectAttempts: attempt });
-
-    // Exponential backoff: 1s, 2s, 4s
-    await sleep(1000 * 2 ** (attempt - 1));
-
-    try {
-      const status = await getRunStatus(state.activeRunId);
-
-      switch (status.status) {
-        case "completed":
-          reconnecting = false;
-          set({
-            runStatus: "completed",
-            finalState: status.final_state,
-            durationMs: status.duration_ms,
-            activeNodeId: null,
-          });
-          break;
-
-        case "running": {
-          reconnecting = false;
-          const { _handleEvent, _handleStreamError, lastEventId } =
-            useRunStore.getState();
-          cleanup = connectStream(
-            state.activeRunId,
-            { onEvent: _handleEvent, onError: _handleStreamError },
-            lastEventId,
-          );
-          set({ runStatus: "running", reconnectAttempts: 0 });
-          break;
-        }
-
-        case "paused":
-          reconnecting = false;
-          set({
-            runStatus: "paused",
-            activeNodeId: status.node_id,
-            pausedPrompt: status.prompt,
-          });
-          break;
-
-        case "error":
-          reconnecting = false;
-          set({
-            runStatus: "error",
-            errorMessage: status.error ?? "Run failed on server",
-            activeNodeId: null,
-          });
-          break;
-      }
-    } catch {
-      // Status check failed — retry
+    })().catch(() => {
+      // Safety net — ensure we always land in a terminal state
       reconnecting = false;
-      useRunStore
-        .getState()
-        ._handleStreamError(new Error("Status check failed"));
-    }
+      set({
+        runStatus: "connection_lost",
+        errorMessage: "Connection lost unexpectedly",
+      });
+    });
   },
 
   _disconnect: () => {

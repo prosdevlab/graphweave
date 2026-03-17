@@ -22,7 +22,10 @@ export function ResumeForm({ prompt, onSubmit }: ResumeFormProps) {
         />
         <Button
           variant="primary"
-          onClick={() => onSubmit(value)}
+          onClick={() => {
+            onSubmit(value);
+            setValue("");
+          }}
           disabled={!value.trim()}
         >
           Resume

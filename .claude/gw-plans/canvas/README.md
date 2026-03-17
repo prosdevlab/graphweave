@@ -7,7 +7,7 @@ React 19 + React Flow frontend phases. Depends on execution phases 3-4 for API s
 | Phase | Plan | Status |
 |-------|------|--------|
 | 1 | [Canvas core](phase-1-canvas-core/overview.md) -- Home view, Start/LLM/End nodes, edge wiring, config panel, save/load | Complete |
-| 2 | [SSE run panel](phase-2-sse-run-panel/overview.md) -- SSE streaming, run panel, node highlighting, reconnection, resume | Planned |
+| 2 | [SSE run panel](phase-2-sse-run-panel/overview.md) -- SSE streaming, run panel, node highlighting, reconnection, resume | In progress |
 | 3 | Full node set -- Tool/Condition/HumanInput nodes, settings page | Not started |
 | 4 | Validation, run input modal, state panel | Not started |
 | 5 | Error handling, run history, debug panel, JSON schema panel | Not started |
