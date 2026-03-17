@@ -99,7 +99,7 @@ export function connectStream(
 ): () => void {
   const encoded = encodeURIComponent(runId);
   const params =
-    lastEventId != null && lastEventId > 0
+    lastEventId != null && Number.isFinite(lastEventId) && lastEventId > 0
       ? `?last_event_id=${lastEventId}`
       : "";
   const url = apiUrl(`/runs/${encoded}/stream${params}`);

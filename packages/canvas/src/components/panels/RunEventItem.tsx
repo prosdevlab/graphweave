@@ -9,14 +9,10 @@ import {
   Play,
   XCircle,
 } from "lucide-react";
+import { formatDuration } from "../../utils/format";
 
 interface RunEventItemProps {
   event: GraphEvent;
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 export function RunEventItem({ event }: RunEventItemProps) {

@@ -18,7 +18,15 @@ export function RunInputDialog({
 
   const handleSubmit = () => {
     try {
-      const parsed = JSON.parse(value);
+      const parsed: unknown = JSON.parse(value);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        Array.isArray(parsed)
+      ) {
+        setParseError("Input must be a JSON object");
+        return;
+      }
       setParseError(null);
       onSubmit(parsed as Record<string, unknown>);
     } catch {
