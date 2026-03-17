@@ -1,6 +1,7 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import type {
   ConditionNode,
+  HumanInputNode,
   LLMNode,
   NodeSchema,
   ToolNode,
@@ -12,6 +13,7 @@ import { Trash2 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { ConditionNodeConfig } from "./config/ConditionNodeConfig";
 import { EndNodeConfig } from "./config/EndNodeConfig";
+import { HumanInputNodeConfig } from "./config/HumanInputNodeConfig";
 import { LLMNodeConfig } from "./config/LLMNodeConfig";
 import { StartNodeConfig } from "./config/StartNodeConfig";
 import { ToolNodeConfig } from "./config/ToolNodeConfig";
@@ -86,6 +88,10 @@ function isConditionNode(node: NodeSchema): node is ConditionNode {
   return node.type === "condition";
 }
 
+function isHumanInputNode(node: NodeSchema): node is HumanInputNode {
+  return node.type === "human_input";
+}
+
 function renderConfigForm(
   node: NodeSchema,
   onChange: (updates: {
@@ -105,6 +111,9 @@ function renderConfigForm(
     case "condition":
       if (!isConditionNode(node)) return null;
       return <ConditionNodeConfig node={node} onChange={onChange} />;
+    case "human_input":
+      if (!isHumanInputNode(node)) return null;
+      return <HumanInputNodeConfig node={node} onChange={onChange} />;
     case "end":
       return <EndNodeConfig node={node} onChange={onChange} />;
     default:
