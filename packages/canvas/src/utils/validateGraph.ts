@@ -1,4 +1,12 @@
-import type { EdgeSchema, NodeSchema } from "@shared/schema";
+import type {
+  ConditionNode,
+  EdgeSchema,
+  HumanInputNode,
+  NodeSchema,
+  ToolNode,
+} from "@shared/schema";
+
+const EXHAUSTIVE_CONDITION_TYPES = new Set(["tool_error", "iteration_limit"]);
 
 export interface ValidationError {
   message: string;
@@ -59,6 +67,89 @@ export function validateGraph(
       errors.push({
         nodeId: node.id,
         message: `${node.label || "LLM"} node needs a system prompt`,
+      });
+    }
+  }
+
+  // 6-7. Tool nodes: tool_name and output_key must not be empty
+  for (const node of nodes) {
+    if (node.type !== "tool") continue;
+    const toolNode = node as ToolNode;
+    if (!toolNode.config.tool_name?.trim()) {
+      errors.push({
+        nodeId: node.id,
+        message: `${node.label || "Tool"} node needs a tool selected`,
+      });
+    }
+    if (!toolNode.config.output_key?.trim()) {
+      errors.push({
+        nodeId: node.id,
+        message: `${node.label || "Tool"} node needs an output key`,
+      });
+    }
+  }
+
+  // 8-10. Condition node edge and branch validation
+  for (const node of nodes) {
+    if (node.type !== "condition") continue;
+    const condNode = node as ConditionNode;
+    const outEdges = edges.filter((e) => e.source === node.id);
+
+    // Rule 8: must have at least one outgoing edge with condition_branch
+    const branchedEdges = outEdges.filter((e) => e.condition_branch);
+    if (branchedEdges.length === 0) {
+      errors.push({
+        nodeId: node.id,
+        message: `${node.label || "Condition"} node has no outgoing branch edges`,
+      });
+      continue;
+    }
+
+    // Rule 9: all outgoing edges must have condition_branch set
+    const unnamedEdges = outEdges.filter((e) => !e.condition_branch);
+    if (unnamedEdges.length > 0) {
+      errors.push({
+        nodeId: node.id,
+        message: `${node.label || "Condition"} node has edges without branch names`,
+      });
+    }
+
+    // Rule 10: default_branch validation
+    const conditionType = condNode.config.condition?.type ?? "";
+    const isExhaustive = EXHAUSTIVE_CONDITION_TYPES.has(conditionType);
+    if (!isExhaustive) {
+      const defaultBranch = condNode.config.default_branch;
+      const validBranches = new Set(
+        branchedEdges.map((e) => e.condition_branch),
+      );
+      if (!defaultBranch?.trim()) {
+        errors.push({
+          nodeId: node.id,
+          message: `${node.label || "Condition"} node needs a default branch`,
+        });
+      } else if (!validBranches.has(defaultBranch)) {
+        errors.push({
+          nodeId: node.id,
+          message: `${node.label || "Condition"} node default branch does not match any edge branch`,
+        });
+      }
+    }
+  }
+
+  // 11-12. HumanInput nodes: prompt and input_key must not be empty
+  for (const node of nodes) {
+    if (node.type !== "human_input") continue;
+    const hiNode = node as HumanInputNode;
+    if (!hiNode.config.prompt?.trim()) {
+      errors.push({
+        nodeId: node.id,
+        message: `${node.label || "Human Input"} node needs a prompt`,
+      });
+    }
+    if (!hiNode.config.input_key?.trim()) {
+      errors.push({
+        nodeId: node.id,
+        message: `${node.label || "Human Input"} node needs an input key`,
       });
     }
   }
