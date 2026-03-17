@@ -11,8 +11,8 @@ export const NODE_DEFAULTS: Record<string, () => Partial<NodeSchema>> = {
     type: "llm" as const,
     label: "LLM",
     config: {
-      provider: "openai",
-      model: "gpt-4o",
+      provider: "gemini",
+      model: "gemini-2.0-flash",
       system_prompt: "",
       temperature: 0.7,
       max_tokens: 1024,
