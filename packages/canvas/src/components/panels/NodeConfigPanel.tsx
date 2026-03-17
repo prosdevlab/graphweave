@@ -1,5 +1,5 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
-import type { LLMNode, NodeSchema } from "@shared/schema";
+import type { LLMNode, NodeSchema, ToolNode } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Button } from "@ui/Button";
 import { Sheet } from "@ui/Sheet";
@@ -8,6 +8,7 @@ import { useCallback, useMemo } from "react";
 import { EndNodeConfig } from "./config/EndNodeConfig";
 import { LLMNodeConfig } from "./config/LLMNodeConfig";
 import { StartNodeConfig } from "./config/StartNodeConfig";
+import { ToolNodeConfig } from "./config/ToolNodeConfig";
 
 export function NodeConfigPanel() {
   const { selectedNodeId, setSelectedNodeId } = useCanvasContext();
@@ -71,6 +72,10 @@ function isLLMNode(node: NodeSchema): node is LLMNode {
   return node.type === "llm";
 }
 
+function isToolNode(node: NodeSchema): node is ToolNode {
+  return node.type === "tool";
+}
+
 function renderConfigForm(
   node: NodeSchema,
   onChange: (updates: {
@@ -84,6 +89,9 @@ function renderConfigForm(
     case "llm":
       if (!isLLMNode(node)) return null;
       return <LLMNodeConfig node={node} onChange={onChange} />;
+    case "tool":
+      if (!isToolNode(node)) return null;
+      return <ToolNodeConfig node={node} onChange={onChange} />;
     case "end":
       return <EndNodeConfig node={node} onChange={onChange} />;
     default:
