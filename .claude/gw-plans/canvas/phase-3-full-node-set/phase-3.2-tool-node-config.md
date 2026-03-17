@@ -96,15 +96,40 @@ UI shows: param name on left, state key on right. Internal state is
 interface SettingsSlice {
   tools: ToolInfo[];
   toolsLoaded: boolean;
+  toolsError: string | null;
   loadTools: () => Promise<void>;
   providers: Record<string, ProviderStatus> | null;
   providersLoaded: boolean;
+  providersError: string | null;
   loadProviders: () => Promise<void>;
 }
 ```
 
 Fetch-once pattern: `loadTools()` returns early if already loaded. Called from
 ToolNodeConfig on mount and from SettingsPage (Part 3.6).
+
+Both `loadTools()` and `loadProviders()` catch errors and surface them:
+
+```typescript
+loadTools: async () => {
+  if (get().toolsLoaded) return;
+  try {
+    const tools = await getTools();
+    set({ tools, toolsLoaded: true, toolsError: null });
+  } catch (err) {
+    set({ toolsError: err instanceof Error ? err.message : "Failed to load tools" });
+  }
+},
+loadProviders: async () => {
+  if (get().providersLoaded) return;
+  try {
+    const providers = await getProviders();
+    set({ providers, providersLoaded: true, providersError: null });
+  } catch (err) {
+    set({ providersError: err instanceof Error ? err.message : "Failed to load providers" });
+  }
+},
+```
 
 ### ToolNode presenter enhancement
 
@@ -117,6 +142,12 @@ showing provider + model):
   |  CALCULATOR               |
   +---------------------------+
 ```
+
+## Required tests
+
+| Test file | Test case | Priority |
+|-----------|-----------|----------|
+| `ToolNodeConfig.test.tsx` | Renders tool options from settings store | HIGH |
 
 ## Verification
 

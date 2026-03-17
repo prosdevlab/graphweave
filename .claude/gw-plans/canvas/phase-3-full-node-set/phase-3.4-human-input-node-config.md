@@ -59,6 +59,12 @@ clears the field, `Number.parseInt("")` returns `NaN`. Sanitize on change:
 if empty or NaN, fall back to `300000`. Same pattern as LLMNodeConfig where
 temperature/max_tokens always have values.
 
+## Required tests
+
+| Test file | Test case | Priority |
+|-----------|-----------|----------|
+| `HumanInputNodeConfig.test.tsx` | Empty timeout field defaults to 300000 | HIGH |
+
 ## Verification
 
 - `tsc --noEmit` passes

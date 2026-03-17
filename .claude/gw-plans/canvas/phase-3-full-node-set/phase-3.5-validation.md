@@ -29,8 +29,16 @@ These run before `POST /run` to give fast feedback.
   7. Tool nodes: output_key must not be empty
   8. Condition nodes: must have at least one outgoing edge with condition_branch
   9. Condition nodes: all outgoing edges must have condition_branch set
-  10. Condition nodes: default_branch must reference a valid branch name
-      (matches server-side validation in builder.py line 253-258)
+  10. Condition nodes: default_branch validation (two sub-rules):
+      a. For NON-EXHAUSTIVE types (field_equals, field_contains, field_exists,
+         llm_router): default_branch must be non-empty AND reference a valid
+         branch name (an outgoing edge's condition_branch). Empty string is
+         invalid — the server-side check `if default_branch and ...` skips
+         empty strings, causing the router to return "" which isn't in
+         branch_map, crashing at runtime.
+      b. For EXHAUSTIVE types (tool_error, iteration_limit): default_branch
+         is ignored (the router always returns one of exactly 2 branches).
+         Skip validation for these types.
   11. HumanInput nodes: prompt must not be empty
   12. HumanInput nodes: input_key must not be empty
 ```
@@ -51,9 +59,25 @@ Follow existing pattern — use the node's label for context:
 Narrow with `node.type === "tool"` before accessing `config.tool_name`,
 following the existing LLM pattern (rule 5).
 
+## Required tests
+
+| Test case | Priority |
+|-----------|----------|
+| Tool node with empty tool_name fails validation | HIGH |
+| Tool node with empty output_key fails validation | HIGH |
+| Condition node with no outgoing edges fails validation (rule 8) | HIGH |
+| Condition node with edge missing condition_branch fails (rule 9) | HIGH |
+| Condition node (field_equals) with empty default_branch fails (rule 10a) | HIGH |
+| Condition node (field_equals) with default_branch not in edge branches fails (rule 10a) | HIGH |
+| Condition node (tool_error) with empty default_branch passes (rule 10b, exhaustive) | HIGH |
+| HumanInput node with empty prompt fails validation | HIGH |
+| HumanInput node with empty input_key fails validation | HIGH |
+
 ## Verification
 
 - `pnpm --filter canvas test` — all new test cases pass
 - Existing validation tests still pass
 - Manual: create a Tool node with empty tool_name, click Run — see toast error
 - Manual: create a Condition node with no outgoing edges, click Run — see toast error
+- Manual: create a field_equals Condition with empty default_branch, click Run — see toast error
+- Manual: create a tool_error Condition with empty default_branch, click Run — no error (exhaustive)
