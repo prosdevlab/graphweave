@@ -20,6 +20,39 @@ export const NODE_DEFAULTS: Record<string, () => Partial<NodeSchema>> = {
       output_key: "messages",
     },
   }),
+  tool: () => ({
+    type: "tool" as const,
+    label: "Tool",
+    config: {
+      tool_name: "",
+      input_map: {},
+      output_key: "tool_result",
+    },
+  }),
+  condition: () => ({
+    type: "condition" as const,
+    label: "Condition",
+    config: {
+      condition: {
+        type: "field_equals",
+        field: "",
+        value: "",
+        branch: "true",
+        else_branch: "false",
+      },
+      branches: {} as Record<string, string>,
+      default_branch: "",
+    },
+  }),
+  human_input: () => ({
+    type: "human_input" as const,
+    label: "Human Input",
+    config: {
+      prompt: "Please provide input:",
+      input_key: "user_input",
+      timeout_ms: 300000,
+    },
+  }),
   end: () => ({
     type: "end" as const,
     label: "End",
