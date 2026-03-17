@@ -23,26 +23,36 @@ as edge labels on canvas. Derive `config.branches` from edges at save time.
 
 ### Edge wiring flow
 
+**Edge ID generation**: The current codebase uses `e-${source}-${target}` for
+edge IDs. This collides when a condition node has multiple edges to the same
+target (e.g., both "on_error" and "on_success" route to End). **All edge IDs
+in `onConnect` and `onReconnect` must use `crypto.randomUUID()`** to guarantee
+uniqueness. This also applies to `spliceEdge` calls in `useNodePlacement.ts`
+(see below). The `e-${source}-${target}` pattern in `graphSlice.ts`
+`initGraph` is fine (only creates the single Start→End edge).
+
 ```
   User drags edge from Condition → Target
        |
        v
   onConnect fires
        |
-       looks up source node type via storeNodes
-       (storeNodes already subscribed at top of GraphCanvas —
-        add to onConnect's useCallback dependency array)
+       reads source node type via useGraphStore.getState().nodes
+       (avoids adding storeNodes/storeEdges to dependency array —
+        matches the getState() pattern in useNodePlacement.ts)
        |
        checks: is source a condition node?
        |
    yes |                          no
        v                           v
   count existing edges from       normal edge
-  source (storeEdges.filter)      (no branch)
+  source (getState().edges         (no branch)
+  .filter)
   auto-set condition_branch
-  = "branch_N" (count + 1)
+  = "branch_N" (highest N + 1)
        |
        v
+  edge.id = crypto.randomUUID()
   edge appears on canvas with label "branch_N"
 
   Later, in ConditionNodeConfig:
@@ -67,8 +77,86 @@ as edge labels on canvas. Derive `config.branches` from edges at save time.
 
 Fix: In `onReconnect`, read `oldEdge.data?.condition_branch` (via the RF edge)
 or look up the store edge's `condition_branch`. Copy it to the new edge.
+Use `crypto.randomUUID()` for the new edge ID (same as `onConnect`).
 If the source changed (not just target), and the new source is a condition
 node, auto-assign a branch name.
+
+### Replacement onConnect callback (consolidated)
+
+```typescript
+const onConnect = useCallback((connection: Connection) => {
+  const { nodes: storeNodes, edges: currentEdges, addEdge } =
+    useGraphStore.getState();
+  const sourceNode = storeNodes.find((n) => n.id === connection.source);
+  const isCondition = sourceNode?.type === "condition";
+
+  let condition_branch: string | undefined;
+  if (isCondition) {
+    // Collision-safe auto-naming: find highest existing N, use N + 1
+    const existing = currentEdges
+      .filter((e) => e.source === connection.source && e.condition_branch)
+      .map((e) => e.condition_branch!);
+    const maxN = existing.reduce((max, name) => {
+      const m = name.match(/^branch_(\d+)$/);
+      return m ? Math.max(max, Number(m[1])) : max;
+    }, 0);
+    condition_branch = `branch_${maxN + 1}`;
+  }
+
+  addEdge({
+    id: crypto.randomUUID(),
+    source: connection.source!,
+    target: connection.target!,
+    ...(condition_branch ? { condition_branch } : {}),
+  });
+}, []);
+```
+
+### Replacement onReconnect callback (consolidated)
+
+```typescript
+const onReconnect = useCallback(
+  (oldEdge: Edge, newConnection: Connection) => {
+    const { nodes: storeNodes, edges: currentEdges, removeEdge, addEdge } =
+      useGraphStore.getState();
+
+    // Preserve condition_branch from the old edge
+    const oldStoreEdge = currentEdges.find((e) => e.id === oldEdge.id);
+    let condition_branch = oldStoreEdge?.condition_branch;
+
+    // If the SOURCE changed (not just target), check if new source is condition
+    if (newConnection.source !== oldEdge.source) {
+      const newSourceNode = storeNodes.find(
+        (n) => n.id === newConnection.source,
+      );
+      if (newSourceNode?.type === "condition") {
+        // Auto-assign a new branch name for the new source
+        const existing = currentEdges
+          .filter(
+            (e) => e.source === newConnection.source && e.condition_branch,
+          )
+          .map((e) => e.condition_branch!);
+        const maxN = existing.reduce((max, name) => {
+          const m = name.match(/^branch_(\d+)$/);
+          return m ? Math.max(max, Number(m[1])) : max;
+        }, 0);
+        condition_branch = `branch_${maxN + 1}`;
+      } else {
+        condition_branch = undefined; // new source is not a condition node
+      }
+    }
+
+    removeEdge(oldEdge.id);
+    addEdge({
+      id: crypto.randomUUID(),
+      source: newConnection.source!,
+      target: newConnection.target!,
+      ...(condition_branch ? { condition_branch } : {}),
+    });
+  },
+  [],
+);
+```
 
 ### isValidConnection — allow multiple condition edges to same target
 
@@ -107,7 +195,29 @@ Neither new edge inherits `condition_branch` from the original.
 Fix: In `useNodePlacement.ts`, when the original edge has `condition_branch`,
 copy it to `newEdge1` (original source → inserted node). `newEdge2`
 (inserted node → original target) does NOT get a branch — the inserted
-node is not a condition node.
+node is not a condition node. **Also change both `newEdge1` and `newEdge2` IDs
+from `e-${source}-${target}` to `crypto.randomUUID()`** — this prevents
+collisions when splicing an edge where the condition node already has another
+edge to the same inserted node.
+
+```typescript
+spliceEdge(
+  nearestEdge.id,
+  newNode,
+  {
+    id: crypto.randomUUID(),
+    source: nearestEdge.source,
+    target: newNode.id,
+    condition_branch: nearestEdge.condition_branch, // preserve from original
+  },
+  {
+    id: crypto.randomUUID(),
+    source: newNode.id,
+    target: nearestEdge.target,
+    // no condition_branch — inserted node is not a condition node
+  },
+);
+```
 
 ### Edge deletion — destructive for branch data (known limitation)
 
@@ -130,7 +240,8 @@ duplicates after deletions. Example:
 Fix: Parse existing branch names, find the highest N, use N + 1:
 
 ```typescript
-const existing = storeEdges
+const { edges: currentEdges } = useGraphStore.getState();
+const existing = currentEdges
   .filter((e) => e.source === sourceId && e.condition_branch)
   .map((e) => e.condition_branch!);
 const maxN = existing.reduce((max, name) => {
@@ -512,13 +623,17 @@ Show inline validation error on the duplicate input.
 | `GraphCanvas.test.tsx` | onConnect from condition node auto-assigns `condition_branch` | HIGH |
 | `GraphCanvas.test.tsx` | onReconnect preserves `condition_branch` from old edge | HIGH |
 | `GraphCanvas.test.tsx` | isValidConnection allows multiple edges from condition to same target | HIGH |
+| `GraphCanvas.test.tsx` | Two edges from condition to same target get unique IDs | HIGH |
 | `GraphCanvas.test.tsx` | Auto-branch naming avoids collisions after deletions | MEDIUM |
+| `graphSlice.test.ts` | updateEdge modifies condition_branch and sets dirty | HIGH |
 | `useNodePlacement.test.ts` | spliceEdge on condition edge preserves `condition_branch` on first segment | HIGH |
 | `ConditionBranchEditor.test.tsx` | Rejects duplicate branch names | HIGH |
 | `ConditionBranchEditor.test.tsx` | Renaming branch calls updateEdge with new condition_branch | MEDIUM |
 | `ConditionNodeConfig.test.tsx` | Type change resets `config.condition` but preserves `branches`/`default_branch` | HIGH |
 | `ConditionNodeConfig.test.tsx` | `tool_error`/`iteration_limit` hide Default Branch dropdown | MEDIUM |
 | `graphSlice.test.ts` | saveGraph synced `default_branch` is a key in derived `branches` | HIGH |
+| `GraphCanvas.test.tsx` | onConnect from LLM node creates edge without `condition_branch` (regression) | HIGH |
+| `graphSlice.test.ts` | saveGraph without condition nodes does not modify nodes (regression) | HIGH |
 
 ## Verification
 
@@ -527,7 +642,7 @@ Show inline validation error on the duplicate input.
 - Connect edge from Condition → any node: edge auto-gets branch label
 - Reconnect condition edge to new target: branch label preserved
 - Drop node on condition edge: first segment keeps branch label
-- Multiple edges from condition to same target: allowed
+- Multiple edges from condition to same target: allowed, each with unique ID
 - Branch label visible on canvas
 - ConditionBranchEditor: rename a branch, label updates on canvas
 - ConditionBranchEditor: duplicate name shows inline error
