@@ -175,10 +175,11 @@ async def validate_graph(
     if graph is None:
         raise HTTPException(status_code=404, detail="Graph not found")
 
+    schema = {**graph.schema_json, "id": graph.id}
     try:
-        validate_schema(graph.schema_json)
+        validate_schema(schema)
         mock = FakeListChatModel(responses=[""])
-        build_graph(graph.schema_json, llm_override=mock)
+        build_graph(schema, llm_override=mock)
     except GraphBuildError as exc:
         return JSONResponse(
             status_code=422,
@@ -297,8 +298,9 @@ async def start_run(
         raise HTTPException(status_code=404, detail="Graph not found")
 
     saver = InMemorySaver()
+    schema = {**graph.schema_json, "id": graph.id}
     try:
-        result = build_graph(graph.schema_json, checkpointer=saver)
+        result = build_graph(schema, checkpointer=saver)
     except GraphBuildError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
