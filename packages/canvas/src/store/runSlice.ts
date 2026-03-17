@@ -139,6 +139,7 @@ export const useRunStore = create<RunSlice>((set) => ({
     // Close old connection, open new one BEFORE the resume POST
     // (race condition fix — server waits 2s for SSE listener)
     cleanup?.();
+    terminalReceived = false;
     cleanup = connectStream(activeRunId, {
       onEvent: _handleEvent,
       onError: _handleStreamError,

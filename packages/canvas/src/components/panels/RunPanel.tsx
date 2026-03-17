@@ -1,14 +1,9 @@
 import { useRunStore } from "@store/runSlice";
 import { Sheet } from "@ui/Sheet";
 import { useEffect, useRef, useState } from "react";
+import { formatDuration } from "../../utils/format";
 import { ResumeForm } from "./ResumeForm";
 import { RunEventItem } from "./RunEventItem";
-
-function formatDuration(ms: number | null): string {
-  if (ms == null) return "";
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
 
 export function RunPanel() {
   const runStatus = useRunStore((s) => s.runStatus);
