@@ -165,7 +165,7 @@ async def health() -> dict:
     }
 
 
-@app.get("/settings/tools", tags=["System"], summary="Tool registry")
+@app.get("/v1/settings/tools", tags=["System"], summary="Tool registry")
 async def get_tools() -> list[dict]:
     """Return available tools from the registry (names and descriptions only)."""
     from app.tools.registry import REGISTRY
@@ -177,7 +177,7 @@ async def get_tools() -> list[dict]:
 
 
 @app.get(
-    "/settings/providers",
+    "/v1/settings/providers",
     tags=["System"],
     summary="Provider status",
 )
