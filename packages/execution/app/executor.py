@@ -16,7 +16,10 @@ from typing import Any
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 
+from app.builder import GraphBuildError
 from app.db.crud import update_run
+from app.state_utils import InputMapError
+from app.tools.base import ToolNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -221,6 +224,23 @@ class RunManager:
 # ---------------------------------------------------------------------------
 
 
+def _error_title(exc: Exception) -> str:
+    """Return a short, user-facing title for a known application error."""
+    if isinstance(exc, InputMapError):
+        cause_msg = str(exc.cause).lower()
+        if "index out of range" in cause_msg or "list index" in cause_msg:
+            return f"Is the '{exc.field}' field empty?"
+        is_missing = isinstance(exc.cause, (KeyError, NameError))
+        if "available fields" in cause_msg or is_missing:
+            return "State field not found"
+        return "Input mapping failed"
+    if isinstance(exc, ToolNotFoundError):
+        return "Tool not configured"
+    if isinstance(exc, GraphBuildError):
+        return "Graph configuration error"
+    return "Run failed"
+
+
 async def _execute_run(
     ctx: RunContext,
     input_data: dict,
@@ -244,6 +264,42 @@ async def _execute_run(
             ctx.run_id,
             status="error",
             error="Cancelled",
+            duration_ms=_elapsed_ms(run_start),
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "role" in msg and "content" in msg:
+            title = "Invalid message format"
+            detail = (
+                f"{msg}\n\nTip: messages must have "
+                "'role' (e.g. \"user\") and 'content' fields."
+            )
+        else:
+            title = "Validation error"
+            detail = msg
+        logger.error("Run %s validation error: %s", ctx.run_id, msg)
+        _emit(ctx, "error", {"message": detail, "title": title, "recoverable": False})
+        ctx.status = "error"
+        await _safe_update_run(
+            db,
+            ctx.run_id,
+            status="error",
+            error=msg,
+            duration_ms=_elapsed_ms(run_start),
+        )
+    except (InputMapError, ToolNotFoundError, GraphBuildError) as exc:
+        logger.error("Run %s failed: %s", ctx.run_id, exc)
+        _emit(
+            ctx,
+            "error",
+            {"message": str(exc), "title": _error_title(exc), "recoverable": False},
+        )
+        ctx.status = "error"
+        await _safe_update_run(
+            db,
+            ctx.run_id,
+            status="error",
+            error=str(exc),
             duration_ms=_elapsed_ms(run_start),
         )
     except Exception as exc:

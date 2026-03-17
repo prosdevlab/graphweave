@@ -1,8 +1,18 @@
 import { request } from "./client";
 
+export interface ToolParameter {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+  default?: string | null;
+  examples?: string[] | null;
+}
+
 export interface ToolInfo {
   name: string;
   description: string;
+  parameters: ToolParameter[];
 }
 
 export interface ProviderStatus {

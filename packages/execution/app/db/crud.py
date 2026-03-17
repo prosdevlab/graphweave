@@ -15,6 +15,20 @@ def _utcnow_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _serialize(obj: object) -> object:
+    """Recursively convert non-serializable objects to dicts.
+
+    Handles LangGraph messages and other non-JSON-native types.
+    """
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize(item) for item in obj]
+    if hasattr(obj, "model_dump"):
+        return _serialize(obj.model_dump())
+    return obj
+
+
 # ── Graphs ──────────────────────────────────────────────────────────────
 
 
@@ -255,7 +269,7 @@ async def update_run(
     for field_name, value in fields.items():
         col = _RUN_COLUMN_MAP.get(field_name, field_name)
         if field_name == "final_state" and value is not None:
-            value = json.dumps(value)
+            value = json.dumps(_serialize(value))
         set_parts.append(f"{col} = ?")
         values.append(value)
 

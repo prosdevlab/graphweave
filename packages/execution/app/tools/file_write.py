@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 from app.tools.sandbox import resolve_sandboxed_path
 
 _MAX_CONTENT_SIZE = 1_000_000  # 1 MB
@@ -14,6 +14,29 @@ _SANDBOX_ROOT = os.environ.get("FILE_SANDBOX_ROOT", "/workspace")
 class FileWriteTool(BaseTool):
     name = "file_write"
     description = "Write text content to a sandboxed file"
+    parameters = [
+        ToolParameter(
+            name="path",
+            type="string",
+            required=True,
+            description="File path within sandbox",
+            examples=["data/output.txt"],
+        ),
+        ToolParameter(
+            name="content",
+            type="string",
+            required=True,
+            description="Text content to write",
+        ),
+        ToolParameter(
+            name="mode",
+            type="string",
+            required=False,
+            description="overwrite or append",
+            default="overwrite",
+            examples=["overwrite", "append"],
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         path = inputs.get("path", "")

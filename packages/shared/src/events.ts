@@ -26,5 +26,10 @@ export type GraphEvent =
     }
   | {
       event: "error";
-      data: { node_id?: string; message: string; recoverable: boolean };
+      data: {
+        node_id?: string;
+        message: string;
+        recoverable: boolean;
+        title?: string;
+      };
     };

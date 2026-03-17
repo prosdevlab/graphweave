@@ -6,7 +6,7 @@ import re
 
 import httpx
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 
 _GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 _FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
@@ -17,6 +17,23 @@ _LATLON_RE = re.compile(r"^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$")
 class WeatherTool(BaseTool):
     name = "weather"
     description = "Get current weather or 7-day forecast for a location"
+    parameters = [
+        ToolParameter(
+            name="location",
+            type="string",
+            required=True,
+            description="City name or lat,lon",
+            examples=["London", "48.8566,2.3522"],
+        ),
+        ToolParameter(
+            name="action",
+            type="string",
+            required=False,
+            description="current or forecast",
+            default="current",
+            examples=["current", "forecast"],
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         location = inputs.get("location", "").strip()

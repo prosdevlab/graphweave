@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 import httpx
 import trafilatura
 
-from app.tools.base import BaseTool
+from app.tools.base import BaseTool, ToolParameter
 from app.tools.ssrf_transport import SSRFSafeTransport
 
 _MAX_TEXT_LENGTH = 10_000
@@ -62,6 +62,15 @@ def validate_url(url: str) -> tuple[str | None, str | None]:
 class UrlFetchTool(BaseTool):
     name = "url_fetch"
     description = "Fetch and extract text content from a URL"
+    parameters = [
+        ToolParameter(
+            name="url",
+            type="string",
+            required=True,
+            description="URL to fetch",
+            examples=["https://example.com"],
+        ),
+    ]
 
     def run(self, inputs: dict) -> dict:
         url = inputs.get("url", "")
