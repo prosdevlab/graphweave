@@ -17,7 +17,7 @@ export const NODE_DEFAULTS: Record<string, () => Partial<NodeSchema>> = {
       temperature: 0.7,
       max_tokens: 1024,
       input_map: {},
-      output_key: "result",
+      output_key: "messages",
     },
   }),
   end: () => ({
