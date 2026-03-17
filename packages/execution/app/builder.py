@@ -306,8 +306,20 @@ def _make_llm_node(node_id: str, config: dict, llm) -> Callable:
         messages = []
         if config.get("system_prompt"):
             messages.append(SystemMessage(content=config["system_prompt"]))
-        user_content = _format_inputs(inputs)
-        messages.append(HumanMessage(content=user_content))
+
+        if inputs:
+            # Explicit input_map: build a HumanMessage from mapped values
+            user_content = _format_inputs(inputs)
+            messages.append(HumanMessage(content=user_content))
+        else:
+            # No input_map: use messages from state (conversational pattern)
+            state_messages = state.get("messages", [])
+            if state_messages:
+                messages.extend(state_messages)
+            else:
+                # Fallback: send a minimal prompt so the LLM has something
+                messages.append(HumanMessage(content="Begin."))
+
         response = await llm.ainvoke(messages)
         return {config["output_key"]: response.content}
 
