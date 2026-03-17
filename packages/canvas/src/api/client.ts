@@ -30,6 +30,11 @@ export class ApiError extends Error {
 
 const BASE_URL = "/api";
 
+/** Build a full API URL from a path. Used by both request() and EventSource. */
+export function apiUrl(path: string): string {
+  return `${BASE_URL}${path}`;
+}
+
 export async function request<T>(
   path: string,
   options?: RequestInit,
@@ -38,7 +43,7 @@ export async function request<T>(
     "Content-Type": "application/json",
   };
 
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: { ...headers, ...options?.headers },
   });

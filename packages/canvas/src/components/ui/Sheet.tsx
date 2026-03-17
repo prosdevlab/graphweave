@@ -2,7 +2,7 @@ import { X } from "lucide-react";
 import type { ReactNode } from "react";
 import { IconButton } from "./IconButton";
 
-type SheetSide = "left" | "right";
+type SheetSide = "left" | "right" | "bottom";
 
 interface SheetProps {
   open: boolean;
@@ -14,17 +14,34 @@ interface SheetProps {
 
 const sideClasses: Record<
   SheetSide,
-  { position: string; border: string; transform: string }
+  {
+    position: string;
+    border: string;
+    openTransform: string;
+    closedTransform: string;
+    size: string;
+  }
 > = {
   left: {
-    position: "left-0",
+    position: "left-0 top-0",
     border: "border-r",
-    transform: "-translate-x-full",
+    openTransform: "translate-x-0",
+    closedTransform: "-translate-x-full",
+    size: "h-full w-80",
   },
   right: {
-    position: "right-0",
+    position: "right-0 top-0",
     border: "border-l",
-    transform: "translate-x-full",
+    openTransform: "translate-x-0",
+    closedTransform: "translate-x-full",
+    size: "h-full w-80",
+  },
+  bottom: {
+    position: "inset-x-0 bottom-0",
+    border: "border-t",
+    openTransform: "translate-y-0",
+    closedTransform: "translate-y-full",
+    size: "w-full h-64",
   },
 };
 
@@ -35,11 +52,12 @@ export function Sheet({
   side = "right",
   children,
 }: SheetProps) {
-  const { position, border, transform } = sideClasses[side];
+  const { position, border, openTransform, closedTransform, size } =
+    sideClasses[side];
 
   return (
     <div
-      className={`absolute ${position} top-0 z-20 h-full w-80 ${border} border-zinc-800 bg-zinc-900 shadow-xl transition-transform duration-200 ease-in-out ${open ? "translate-x-0" : transform}`}
+      className={`absolute ${position} z-20 ${size} ${border} border-zinc-800 bg-zinc-900 shadow-xl transition-transform duration-200 ease-in-out ${open ? openTransform : closedTransform}`}
       // biome-ignore lint/a11y/useSemanticElements: Sheet uses div+role instead of <dialog> to avoid modal backdrop and enable CSS slide transitions
       role="dialog"
       aria-label={title}

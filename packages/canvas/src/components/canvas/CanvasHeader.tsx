@@ -1,7 +1,8 @@
 import { useGraphStore } from "@store/graphSlice";
+import { useRunStore } from "@store/runSlice";
 import { useUIStore } from "@store/uiSlice";
 import { Button } from "@ui/Button";
-import { ChevronLeft, Pencil, Save } from "lucide-react";
+import { ChevronLeft, Pencil, Play, Save, Square } from "lucide-react";
 import {
   type KeyboardEvent,
   memo,
@@ -11,6 +12,8 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router";
+import { validateGraph } from "../../utils/validateGraph";
+import { RunInputDialog } from "./RunInputDialog";
 
 function CanvasHeaderComponent() {
   const graph = useGraphStore((s) => s.graph);
@@ -19,9 +22,11 @@ function CanvasHeaderComponent() {
   const saveError = useGraphStore((s) => s.saveError);
   const saveGraph = useGraphStore((s) => s.saveGraph);
   const renameGraph = useGraphStore((s) => s.renameGraph);
+  const runStatus = useRunStore((s) => s.runStatus);
   const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
+  const [inputDialogOpen, setInputDialogOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Show toast when saveError appears
@@ -67,6 +72,49 @@ function CanvasHeaderComponent() {
   const handleSave = useCallback(() => {
     saveGraph();
   }, [saveGraph]);
+
+  const handleRun = useCallback(async () => {
+    const { nodes, edges, dirty: isDirty } = useGraphStore.getState();
+
+    const errors = validateGraph(nodes, edges);
+    if (errors.length > 0) {
+      useUIStore
+        .getState()
+        .showToast(errors[0]?.message ?? "Validation failed", "error");
+      return;
+    }
+
+    if (isDirty) {
+      await useGraphStore.getState().saveGraph();
+      if (useGraphStore.getState().saveError) {
+        useUIStore
+          .getState()
+          .showToast(
+            "Failed to save — fix save errors before running",
+            "error",
+          );
+        return;
+      }
+    }
+
+    setInputDialogOpen(true);
+  }, []);
+
+  const handleRunSubmit = useCallback(
+    (input: Record<string, unknown>) => {
+      setInputDialogOpen(false);
+      if (graph) {
+        useRunStore.getState().startRun(graph.id, input);
+      }
+    },
+    [graph],
+  );
+
+  const handleStop = useCallback(() => {
+    useRunStore.getState().cancelRun();
+  }, []);
+
+  const isRunning = runStatus === "running" || runStatus === "reconnecting";
 
   return (
     <>
@@ -117,15 +165,39 @@ function CanvasHeaderComponent() {
           )}
         </div>
 
-        <Button
-          variant="primary"
-          onClick={handleSave}
-          disabled={!graph || !dirty || saving}
-        >
-          <Save size={14} className="mr-1" />
-          {saving ? "Saving..." : "Save"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            onClick={handleSave}
+            disabled={!graph || !dirty || saving}
+          >
+            <Save size={14} className="mr-1" />
+            {saving ? "Saving..." : "Save"}
+          </Button>
+
+          {isRunning ? (
+            <Button variant="ghost" onClick={handleStop}>
+              <Square size={14} className="mr-1 text-red-400" />
+              Stop
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              onClick={handleRun}
+              disabled={!graph || saving}
+            >
+              <Play size={14} className="mr-1" />
+              Run
+            </Button>
+          )}
+        </div>
       </header>
+
+      <RunInputDialog
+        open={inputDialogOpen}
+        onClose={() => setInputDialogOpen(false)}
+        onSubmit={handleRunSubmit}
+      />
     </>
   );
 }

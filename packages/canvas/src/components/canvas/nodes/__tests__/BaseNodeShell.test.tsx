@@ -10,6 +10,15 @@ vi.mock("@xyflow/react", () => ({
     <div data-testid={`handle-${type}`} data-position={position} />
   ),
   Position: { Left: "left", Right: "right" },
+  useNodeId: () => "test-node-id",
+}));
+
+vi.mock("@store/runSlice", () => ({
+  useRunStore: Object.assign(
+    (selector: (s: { activeNodeId: string | null }) => unknown) =>
+      selector({ activeNodeId: null }),
+    { getState: () => ({ activeNodeId: null }) },
+  ),
 }));
 
 const defaultProps = {
