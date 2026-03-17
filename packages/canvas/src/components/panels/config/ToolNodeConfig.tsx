@@ -53,6 +53,11 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
     toRows(node.config.input_map),
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on node.id to reset rows only when switching nodes, not on every keystroke
+  useEffect(() => {
+    setRows(toRows(node.config.input_map));
+  }, [node.id]);
+
   useEffect(() => {
     loadTools();
   }, [loadTools]);
