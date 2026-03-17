@@ -121,9 +121,9 @@ interface UISlice {
 CONNECTED → graph_completed → COMPLETED  (normal path)
           ↘ connection drops unexpectedly
             → RECONNECTING (backoff: 1s → 2s → 4s, max 3 attempts)
-            → GET /graphs/run/:id/status
+            → GET /runs/:id/status
               { status: "completed" } → replay terminal event → COMPLETED
-              { status: "running"   } → reattach to /stream   → CONNECTED
+              { status: "running"   } → reattach to /runs/:id/stream → CONNECTED
               { status: "paused"    } → show resume UI        → PAUSED
               404 / server error      → FAILED, show banner
             → 3 failed attempts → FAILED

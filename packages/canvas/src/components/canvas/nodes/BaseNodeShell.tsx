@@ -1,4 +1,5 @@
-import { Handle, Position } from "@xyflow/react";
+import { useRunStore } from "@store/runSlice";
+import { Handle, Position, useNodeId } from "@xyflow/react";
 import type { LucideIcon } from "lucide-react";
 import { type ReactNode, memo } from "react";
 
@@ -23,9 +24,13 @@ function BaseNodeShellComponent({
   targetHandle = true,
   children,
 }: BaseNodeShellProps) {
+  const nodeId = useNodeId();
+  const activeNodeId = useRunStore((s) => s.activeNodeId);
+  const isActive = nodeId != null && activeNodeId === nodeId;
+
   return (
     <div
-      className={`gw-node ${accentClass} ${selected ? "gw-node-selected" : ""}`}
+      className={`gw-node ${accentClass} ${selected ? "gw-node-selected" : ""} ${isActive ? "gw-node-active" : ""}`}
     >
       {targetHandle && (
         <Handle type="target" position={Position.Left} className="gw-handle" />
