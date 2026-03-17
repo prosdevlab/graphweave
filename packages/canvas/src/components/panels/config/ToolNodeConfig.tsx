@@ -1,4 +1,5 @@
 import type { ToolNode } from "@shared/schema";
+import { useGraphStore } from "@store/graphSlice";
 import { useSettingsStore } from "@store/settingsSlice";
 import { Input } from "@ui/Input";
 import { Select } from "@ui/Select";
@@ -46,6 +47,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
   const toolsLoaded = useSettingsStore((s) => s.toolsLoaded);
   const toolsError = useSettingsStore((s) => s.toolsError);
   const loadTools = useSettingsStore((s) => s.loadTools);
+  const stateFields = useGraphStore((s) => s.graph?.state ?? []);
 
   const [rows, setRows] = useState<InputMapRow[]>(() =>
     toRows(node.config.input_map),
@@ -146,16 +148,17 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
       </div>
 
       <div>
-        <div className="mb-1 flex items-center justify-between">
-          <span className="text-xs font-medium text-zinc-400">
-            Input Mapping
-          </span>
-        </div>
+        <span className="mb-1 block text-xs font-medium text-zinc-400">
+          Input Mapping
+        </span>
+        <p className="mb-2 text-[10px] text-zinc-500">
+          Map tool parameters to state fields.
+        </p>
         <div className="space-y-1.5">
           {rows.length > 0 && (
             <div className="mb-1 grid grid-cols-[1fr_1fr_auto] gap-1.5">
-              <span className="text-[10px] text-zinc-500">Param Name</span>
-              <span className="text-[10px] text-zinc-500">State Key</span>
+              <span className="text-[10px] text-zinc-500">Tool param</span>
+              <span className="text-[10px] text-zinc-500">From state</span>
               <span />
             </div>
           )}
@@ -167,11 +170,17 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                 onChange={(e) => handleRowChange(i, "param", e.target.value)}
                 placeholder="param"
               />
-              <Input
+              <Select
                 value={row.stateKey}
                 onChange={(e) => handleRowChange(i, "stateKey", e.target.value)}
-                placeholder="state_key"
-              />
+              >
+                <option value="">pick field…</option>
+                {stateFields.map((f) => (
+                  <option key={f.key} value={f.key}>
+                    {f.key}
+                  </option>
+                ))}
+              </Select>
               <button
                 type="button"
                 onClick={() => handleRemoveRow(i)}
