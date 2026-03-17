@@ -208,11 +208,30 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
         return { ...node, config: { ...node.config, branches } };
       });
 
+      // Auto-register output_keys from llm/tool nodes as state fields
+      const existingStateKeys = new Set(state.graph.state.map((f) => f.key));
+      const extraStateFields: StateField[] = [];
+      for (const node of syncedNodes) {
+        if (node.type !== "llm" && node.type !== "tool") continue;
+        const outputKey = (node.config as Record<string, unknown>).output_key as
+          | string
+          | undefined;
+        if (outputKey && !existingStateKeys.has(outputKey)) {
+          existingStateKeys.add(outputKey);
+          extraStateFields.push({
+            key: outputKey,
+            type: "object",
+            reducer: "replace",
+          });
+        }
+      }
+      const syncedState = [...state.graph.state, ...extraStateFields];
+
       const schema: Omit<GraphSchema, "id" | "metadata"> = {
         name: state.graph.name,
         description: state.graph.description,
         version: state.graph.version,
-        state: state.graph.state,
+        state: syncedState,
         nodes: syncedNodes as typeof state.nodes,
         edges: state.edges,
       };
