@@ -4,7 +4,7 @@ import { useUIStore } from "@store/uiSlice";
 import { Button } from "@ui/Button";
 import { Dialog } from "@ui/Dialog";
 import { Input } from "@ui/Input";
-import { Brain, Play, Plus, Square } from "lucide-react";
+import { Brain, Play, Plus, Settings, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { GraphCard } from "./GraphCard";
@@ -79,9 +79,19 @@ export function HomeView() {
     <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
       <header className="flex h-12 items-center justify-between border-b border-zinc-800 px-6">
         <h1 className="text-sm font-semibold">GraphWeave</h1>
-        <Button variant="primary" onClick={handleNewGraph}>
-          <Plus size={14} className="mr-1" /> New Graph
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            aria-label="Settings"
+          >
+            <Settings size={14} />
+          </button>
+          <Button variant="primary" onClick={handleNewGraph}>
+            <Plus size={14} className="mr-1" /> New Graph
+          </Button>
+        </div>
       </header>
 
       <main className="flex-1 overflow-y-auto px-6 py-6">

@@ -37,6 +37,8 @@ vi.mock("@store/graphSlice", () => ({
       saveError: mockSaveError,
       loadGraph: mockLoadGraph,
       dirty: false,
+      nodes: [],
+      edges: [],
     }),
 }));
 
@@ -62,6 +64,10 @@ vi.mock("../GraphCanvas", () => ({
 
 vi.mock("../../panels/NodeConfigPanel", () => ({
   NodeConfigPanel: () => <div data-testid="node-config-panel">Panel</div>,
+}));
+
+vi.mock("../../panels/RunPanel", () => ({
+  RunPanel: () => <div data-testid="run-panel">RunPanel</div>,
 }));
 
 beforeEach(() => {
