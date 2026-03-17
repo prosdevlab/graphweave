@@ -113,4 +113,239 @@ describe("validateGraph", () => {
       }),
     );
   });
+
+  // Rule 6-7: Tool node validation
+  it("rejects tool node with empty tool_name", () => {
+    const start = makeNode({ type: "start" });
+    const tool = makeNode({
+      type: "tool",
+      label: "My Tool",
+      config: { tool_name: "", input_map: {}, output_key: "result" },
+    });
+    const end = makeNode({ type: "end" });
+    const errors = validateGraph(
+      [start, tool, end],
+      [edge(start.id, tool.id), edge(tool.id, end.id)],
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: tool.id,
+        message: expect.stringContaining("tool selected"),
+      }),
+    );
+  });
+
+  it("rejects tool node with empty output_key", () => {
+    const start = makeNode({ type: "start" });
+    const tool = makeNode({
+      type: "tool",
+      config: { tool_name: "calculator", input_map: {}, output_key: "" },
+    });
+    const end = makeNode({ type: "end" });
+    const errors = validateGraph(
+      [start, tool, end],
+      [edge(start.id, tool.id), edge(tool.id, end.id)],
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: tool.id,
+        message: expect.stringContaining("output key"),
+      }),
+    );
+  });
+
+  // Rule 8-10: Condition node validation
+  it("rejects condition node with no outgoing branch edges", () => {
+    const start = makeNode({ type: "start" });
+    const cond = makeNode({
+      type: "condition",
+      config: {
+        condition: {
+          type: "field_equals",
+          field: "x",
+          value: "y",
+          branch: "yes",
+        },
+        branches: {},
+        default_branch: "",
+      },
+    });
+    const end = makeNode({ type: "end" });
+    // Edge exists but no condition_branch
+    const errors = validateGraph(
+      [start, cond, end],
+      [edge(start.id, cond.id), edge(cond.id, end.id)],
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: cond.id,
+        message: expect.stringContaining("no outgoing branch edges"),
+      }),
+    );
+  });
+
+  it("rejects condition node with edges missing condition_branch", () => {
+    const start = makeNode({ type: "start" });
+    const cond = makeNode({
+      type: "condition",
+      config: {
+        condition: {
+          type: "field_equals",
+          field: "x",
+          value: "y",
+          branch: "yes",
+        },
+        branches: {},
+        default_branch: "no",
+      },
+    });
+    const end = makeNode({ type: "end" });
+    const edges = [
+      edge(start.id, cond.id),
+      { id: "e1", source: cond.id, target: end.id, condition_branch: "yes" },
+      { id: "e2", source: cond.id, target: end.id }, // missing condition_branch
+    ];
+    const errors = validateGraph([start, cond, end], edges);
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: cond.id,
+        message: expect.stringContaining("edges without branch names"),
+      }),
+    );
+  });
+
+  it("rejects field_equals condition with empty default_branch (rule 10a)", () => {
+    const start = makeNode({ type: "start" });
+    const cond = makeNode({
+      type: "condition",
+      config: {
+        condition: {
+          type: "field_equals",
+          field: "x",
+          value: "y",
+          branch: "yes",
+        },
+        branches: { yes: "end-id" },
+        default_branch: "",
+      },
+    });
+    const end = makeNode({ type: "end" });
+    const edges = [
+      edge(start.id, cond.id),
+      { id: "e1", source: cond.id, target: end.id, condition_branch: "yes" },
+    ];
+    const errors = validateGraph([start, cond, end], edges);
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: cond.id,
+        message: expect.stringContaining("default branch"),
+      }),
+    );
+  });
+
+  it("rejects field_equals condition with default_branch not in edge branches (rule 10a)", () => {
+    const start = makeNode({ type: "start" });
+    const cond = makeNode({
+      type: "condition",
+      config: {
+        condition: {
+          type: "field_equals",
+          field: "x",
+          value: "y",
+          branch: "yes",
+        },
+        branches: { yes: "end-id" },
+        default_branch: "nonexistent",
+      },
+    });
+    const end = makeNode({ type: "end" });
+    const edges = [
+      edge(start.id, cond.id),
+      { id: "e1", source: cond.id, target: end.id, condition_branch: "yes" },
+    ];
+    const errors = validateGraph([start, cond, end], edges);
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: cond.id,
+        message: expect.stringContaining("default branch does not match"),
+      }),
+    );
+  });
+
+  it("passes tool_error condition with empty default_branch (rule 10b — exhaustive)", () => {
+    const start = makeNode({ type: "start" });
+    const cond = makeNode({
+      type: "condition",
+      config: {
+        condition: {
+          type: "tool_error",
+          on_error: "error",
+          on_success: "success",
+        },
+        branches: { error: "end-id", success: "end-id" },
+        default_branch: "",
+      },
+    });
+    const end = makeNode({ type: "end" });
+    const edges = [
+      edge(start.id, cond.id),
+      { id: "e1", source: cond.id, target: end.id, condition_branch: "error" },
+      {
+        id: "e2",
+        source: cond.id,
+        target: end.id,
+        condition_branch: "success",
+      },
+    ];
+    const errors = validateGraph([start, cond, end], edges);
+    // No default_branch errors for exhaustive types
+    expect(errors.filter((e) => e.nodeId === cond.id)).not.toContainEqual(
+      expect.objectContaining({
+        message: expect.stringContaining("default branch"),
+      }),
+    );
+  });
+
+  // Rules 11-12: HumanInput node validation
+  it("rejects human_input node with empty prompt", () => {
+    const start = makeNode({ type: "start" });
+    const hi = makeNode({
+      type: "human_input",
+      config: { prompt: "", input_key: "user_input", timeout_ms: 300000 },
+    });
+    const end = makeNode({ type: "end" });
+    const errors = validateGraph(
+      [start, hi, end],
+      [edge(start.id, hi.id), edge(hi.id, end.id)],
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: hi.id,
+        message: expect.stringContaining("needs a prompt"),
+      }),
+    );
+  });
+
+  it("rejects human_input node with empty input_key", () => {
+    const start = makeNode({ type: "start" });
+    const hi = makeNode({
+      type: "human_input",
+      config: {
+        prompt: "Please provide input:",
+        input_key: "",
+        timeout_ms: 300000,
+      },
+    });
+    const end = makeNode({ type: "end" });
+    const errors = validateGraph(
+      [start, hi, end],
+      [edge(start.id, hi.id), edge(hi.id, end.id)],
+    );
+    expect(errors).toContainEqual(
+      expect.objectContaining({
+        nodeId: hi.id,
+        message: expect.stringContaining("input key"),
+      }),
+    );
+  });
 });
