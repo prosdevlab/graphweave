@@ -152,7 +152,13 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
           Input Mapping
         </span>
         <p className="mb-2 text-[10px] text-zinc-500">
-          Map tool parameters to state fields.
+          Map tool parameters to state fields or literal values. Use{" "}
+          <code className="rounded bg-zinc-800 px-0.5">
+            messages[0].content
+          </code>{" "}
+          for the latest user message, or{" "}
+          <code className="rounded bg-zinc-800 px-0.5">"literal"</code> for a
+          fixed string.
         </p>
         <div className="space-y-1.5">
           {rows.length > 0 && (
@@ -170,17 +176,21 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                 onChange={(e) => handleRowChange(i, "param", e.target.value)}
                 placeholder="param"
               />
-              <Select
-                value={row.stateKey}
-                onChange={(e) => handleRowChange(i, "stateKey", e.target.value)}
-              >
-                <option value="">pick field…</option>
-                {stateFields.map((f) => (
-                  <option key={f.key} value={f.key}>
-                    {f.key}
-                  </option>
-                ))}
-              </Select>
+              <>
+                <Input
+                  value={row.stateKey}
+                  onChange={(e) =>
+                    handleRowChange(i, "stateKey", e.target.value)
+                  }
+                  placeholder="messages[0].content"
+                  list={`state-fields-${i}`}
+                />
+                <datalist id={`state-fields-${i}`}>
+                  {stateFields.map((f) => (
+                    <option key={f.key} value={f.key} />
+                  ))}
+                </datalist>
+              </>
               <button
                 type="button"
                 onClick={() => handleRemoveRow(i)}
