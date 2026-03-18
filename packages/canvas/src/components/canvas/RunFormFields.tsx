@@ -6,6 +6,7 @@ import { isMessagesField } from "./runInputUtils";
 interface RunFormFieldsProps {
   inputFields: StateField[];
   outputKeys: Set<string>;
+  outputKeyWriters?: Record<string, string>;
   values: Record<string, unknown>;
   onChange: (key: string, value: unknown) => void;
   fieldHints?: FieldHints;
@@ -14,6 +15,7 @@ interface RunFormFieldsProps {
 export function RunFormFields({
   inputFields,
   outputKeys,
+  outputKeyWriters,
   values,
   onChange,
   fieldHints,
@@ -32,10 +34,15 @@ export function RunFormFields({
 
       {outputKeys.size > 0 && (
         <div className="flex flex-col gap-1">
-          <p className="text-xs text-zinc-500">── Auto-filled by graph ──</p>
+          <p className="text-xs text-zinc-500">── Produced by the graph ──</p>
           {[...outputKeys].map((key) => (
             <p key={key} className="text-sm text-zinc-500">
               {key}
+              {outputKeyWriters?.[key] && (
+                <span className="ml-2 text-zinc-600">
+                  ← {outputKeyWriters[key]}
+                </span>
+              )}
             </p>
           ))}
         </div>
@@ -51,16 +58,55 @@ interface FieldControlProps {
   hints?: FieldHint[];
 }
 
-function HintSources({ hints }: { hints?: FieldHint[] }) {
-  if (!hints || hints.length === 0) return null;
+function dedupeBySource(hints: FieldHint[]): FieldHint[] {
+  const seen = new Set<string>();
+  return hints.filter((h) => {
+    if (seen.has(h.source)) return false;
+    seen.add(h.source);
+    return true;
+  });
+}
+
+function MessageFieldGuidance({ hints }: { hints?: FieldHint[] }) {
+  if (!hints || hints.length === 0) {
+    return (
+      <span className="text-xs text-zinc-500">Sent as a user message</span>
+    );
+  }
+
+  if (hints.length === 1) {
+    const hint = hints[0];
+    if (!hint) return null;
+    return (
+      <span className="text-xs text-zinc-500">
+        Your message is used as the {hint.description.toLowerCase()} (
+        {hint.source})
+      </span>
+    );
+  }
+
+  const uniqueHints = dedupeBySource(hints);
   return (
-    <>
-      {hints.map((h) => (
-        <span key={h.source} className="text-xs text-zinc-500">
-          {h.source}
+    <div className="flex flex-col gap-0.5 text-xs text-zinc-500">
+      <span>Your message is used as:</span>
+      {uniqueHints.map((h) => (
+        <span key={`${h.source}-${h.description}`} className="pl-2">
+          · {h.description.toLowerCase()} ({h.source})
         </span>
       ))}
-    </>
+    </div>
+  );
+}
+
+function HintSources({ hints }: { hints?: FieldHint[] }) {
+  if (!hints || hints.length === 0) return null;
+  const uniqueSources = [...new Set(hints.map((h) => h.source))];
+  const display =
+    uniqueSources.length > 3
+      ? [...uniqueSources.slice(0, 3), `+${uniqueSources.length - 3} more`]
+      : uniqueSources;
+  return (
+    <span className="text-xs text-zinc-500">Used by {display.join(", ")}</span>
   );
 }
 
@@ -90,11 +136,10 @@ function FieldControl({ field, value, onChange, hints }: FieldControlProps) {
           type="text"
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
+          placeholder="Type your message..."
           className="rounded border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
         />
-        <span className="text-xs text-zinc-500">Sent as a user message</span>
-        <HintSources hints={hints} />
+        <MessageFieldGuidance hints={hints} />
       </label>
     );
   }
