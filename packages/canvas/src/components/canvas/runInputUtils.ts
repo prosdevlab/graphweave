@@ -123,8 +123,62 @@ export function classifyFields(
       outputKeyWriters[node.config.output_key] = node.label;
     }
   }
-  const inputFields = state.filter((f) => !outputKeys.has(f.key));
+
+  // Use reducer semantics to determine which fields are user inputs:
+  //   replace — a node fully owns the field; exclude it from user inputs.
+  //   append / merge — the field has multiple contributors. A node writing
+  //     to it does not prevent the user from providing an initial value.
+  //     The canonical example is `messages` (reducer: "append"): the LLM
+  //     appends its response, but the user still provides the first message.
+  //
+  // TODO (long-term): LLM nodes should not default to output_key: "messages".
+  //   They should write to a dedicated field (e.g. "llm_response") and the
+  //   execution layer merges it back into the conversation buffer. This would
+  //   make the replace/append distinction here irrelevant for the common case,
+  //   and the state panel (coming soon) is the right place to configure it.
+  //   See: nodeDefaults.ts (llm.config.output_key).
+  const inputFields = state.filter(
+    (f) => !outputKeys.has(f.key) || f.reducer !== "replace",
+  );
+
   return { inputFields, outputKeys, outputKeyWriters };
+}
+
+export function getConsumedInputFields(
+  state: StateField[],
+  nodes: NodeSchema[],
+): {
+  consumedFields: StateField[];
+  outputKeys: Set<string>;
+  outputKeyWriters: Record<string, string>;
+} {
+  const { inputFields, outputKeys, outputKeyWriters } = classifyFields(
+    state,
+    nodes,
+  );
+
+  // Collect root keys consumed by all nodes' input_maps.
+  // Condition and human_input nodes are excluded — they read/write state
+  // during execution, not from initial user-provided input.
+  const consumedKeys = new Set<string>();
+  for (const node of nodes) {
+    if (node.type !== "llm" && node.type !== "tool") continue;
+    // TypeScript narrows node to LLMNode | ToolNode here — both have input_map
+    const inputMap = node.config.input_map;
+    if (Object.keys(inputMap).length === 0) {
+      // LLM with empty input_map implicitly reads messages from state
+      if (node.type === "llm") consumedKeys.add("messages");
+      continue;
+    }
+    for (const expr of Object.values(inputMap)) {
+      // extractRootKey on quoted literals (e.g. '"now"') returns '"now"' —
+      // no state field has quotes in its key, so it's correctly excluded.
+      if (expr) consumedKeys.add(extractRootKey(expr));
+    }
+  }
+
+  const consumedFields = inputFields.filter((f) => consumedKeys.has(f.key));
+  return { consumedFields, outputKeys, outputKeyWriters };
 }
 
 export function isMessagesField(field: StateField): boolean {
