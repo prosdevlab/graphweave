@@ -77,7 +77,11 @@ export function resolveSourceLabel(
   if (stateKey === "__default__") {
     return defaultValue ? `default (${defaultValue})` : "default";
   }
-  if (stateKey === "messages[-1].content") return "your message";
+  if (stateKey === "user_input") return "user input";
+  if (stateKey === "messages[-1].content") return "your message"; // manual selection
+  // Quoted literal (e.g. '"now"') → show as default(value)
+  const quotedMatch = /^"([^"]*)"$/.exec(stateKey);
+  if (quotedMatch) return `default (${quotedMatch[1]})`;
   // Known state field
   const field = stateFields.find((f) => f.key === stateKey);
   if (field) return field.key;
@@ -153,6 +157,13 @@ function paramTypeToStateFieldType(paramType: string): StateField["type"] {
   return "string";
 }
 
+/** A param is enum-like if it has a small set of short example values. */
+export function isEnumLike(param: { examples?: string[] | null }): boolean {
+  const ex = param.examples;
+  if (!ex || ex.length < 2 || ex.length > 5) return false;
+  return ex.every((e) => e.length <= 20);
+}
+
 export interface AutoMapResult {
   map: Record<string, string>;
   newFields: StateField[];
@@ -161,10 +172,12 @@ export interface AutoMapResult {
 /** Auto-map tool params to state fields when a tool is selected.
  *  Precedence per param:
  *  1. Exact name match with compatible type → map to field.key
- *  2. String param fallback → messages[-1].content (first string param only)
- *  3. Required, no match → auto-create state field
- *  4. Optional with default → "__default__"
- *  5. Required name collision with incompatible field → "" (warning) */
+ *  2. Pre-selected `user_input` target (first required non-enum string, or
+ *     first optional non-enum string if no required string params exist) → `user_input` (auto-created)
+ *  3. Enum-like param with no explicit default → quoted literal of first example (e.g. `'"now"'`)
+ *  4. Required, no match → auto-create state field with param name
+ *  5. Optional with default → `__default__`
+ *  6. Required name collision with incompatible field → `""` (warning) */
 export function autoMapParams(
   toolParams: ToolParameter[],
   stateFields: StateField[],
@@ -172,7 +185,36 @@ export function autoMapParams(
   const map: Record<string, string> = {};
   const newFields: StateField[] = [];
   const newFieldKeys = new Set<string>();
-  let messagesUsed = false;
+
+  // Two-pass user_input assignment:
+  // Pass 1: first required non-enum string param with no exact match gets user_input.
+  // Pass 2: only when NO required string params exist at all, fall back to first
+  //         optional non-enum string param with no exact match.
+  let userInputTarget: string | null = null;
+  const reqCandidate = toolParams.find(
+    (p) =>
+      p.type === "string" &&
+      p.required &&
+      !isEnumLike(p) &&
+      !stateFields.find((f) => f.key === p.name),
+  );
+  if (reqCandidate) {
+    userInputTarget = reqCandidate.name;
+  } else {
+    const hasRequiredStringParam = toolParams.some(
+      (p) => p.type === "string" && p.required,
+    );
+    if (!hasRequiredStringParam) {
+      const optCandidate = toolParams.find(
+        (p) =>
+          p.type === "string" &&
+          !p.required &&
+          !isEnumLike(p) &&
+          !stateFields.find((f) => f.key === p.name),
+      );
+      if (optCandidate) userInputTarget = optCandidate.name;
+    }
+  }
 
   for (const param of toolParams) {
     const exactMatch = stateFields.find((f) => f.key === param.name);
@@ -191,16 +233,32 @@ export function autoMapParams(
       continue;
     }
 
-    // No exact name match — type-compatible fallback for string params
-    if (param.type === "string" && !messagesUsed) {
-      const messagesField = stateFields.find(
-        (f) => f.key === "messages" && f.type === "list",
+    // user_input fallback — only for the pre-selected target param
+    if (param.name === userInputTarget) {
+      const existing = stateFields.find(
+        (f) => f.key === "user_input" && f.type === "string",
       );
-      if (messagesField) {
-        map[param.name] = "messages[-1].content";
-        messagesUsed = true;
-        continue;
+      if (!existing && !newFieldKeys.has("user_input")) {
+        newFields.push({
+          key: "user_input",
+          type: "string",
+          reducer: "replace",
+        });
+        newFieldKeys.add("user_input");
       }
+      map[param.name] = "user_input";
+      continue;
+    }
+
+    // Enum-like with no explicit default → quoted literal of first example.
+    // Params with an explicit default fall through to the __default__ block below.
+    if (
+      isEnumLike(param) &&
+      param.examples?.length &&
+      (param.default === undefined || param.default === null)
+    ) {
+      map[param.name] = `"${param.examples[0]}"`;
+      continue;
     }
 
     // Required → auto-create state field
