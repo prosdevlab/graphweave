@@ -60,6 +60,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
     toRows(node.config.input_map),
   );
   const [expanded, setExpanded] = useState(false);
+  const allMapped = rows.length > 0 && rows.every((r) => r.stateKey !== "");
   const [autoCreatedKeys, setAutoCreatedKeys] = useState<string[]>([]);
 
   const allPresets = useMemo(
@@ -271,8 +272,12 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                     defaultDisplay,
                   ) + (isAutoCreated ? " (auto)" : "");
                 return (
-                  // biome-ignore lint/suspicious/noArrayIndexKey: position-based rows
-                  <div key={i} className="flex items-center gap-2 text-xs">
+                  <button
+                    key={row.param}
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    className="flex w-full items-center gap-2 text-xs hover:bg-zinc-800/50"
+                  >
                     <Check
                       size={12}
                       className={mapped ? "text-emerald-400" : "text-amber-400"}
@@ -280,17 +285,27 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                     <span className="text-zinc-300">{row.param}</span>
                     <span className="text-zinc-600">←</span>
                     <span className="text-zinc-500">{label}</span>
-                  </div>
+                  </button>
                 );
               })}
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                className="mt-1 flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
-              >
-                <ChevronRight size={12} />
-                Edit mappings
-              </button>
+              {allMapped ? (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  className="mt-1 text-[10px] text-zinc-600 hover:text-zinc-400"
+                >
+                  Customize
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setExpanded(true)}
+                  className="mt-1 flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"
+                >
+                  <ChevronRight size={12} />
+                  Edit mappings
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
