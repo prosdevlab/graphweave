@@ -106,6 +106,51 @@ For each gap:
 
 ---
 
+### Pass 3: Risk Mitigation Review
+
+You are a senior reliability engineer. Your job is to identify what could go wrong in production and ensure the plan has proactive mitigations.
+
+**Review Criteria:**
+
+#### 1. Failure Mode Analysis
+For each significant code path:
+- What happens if this fails at runtime?
+- Is the failure visible or silent?
+- Does the failure cascade to other components?
+
+#### 2. Behavioral Regressions
+For each existing behavior being modified:
+- What currently works that could break?
+- Is there a test that would catch this regression?
+- If not, flag it as a test gap (cross-reference with Pass 2)
+
+#### 3. Edge Case Scenarios
+Concrete scenarios the plan should address:
+- Empty / null / unexpected inputs
+- Timing / ordering assumptions
+- State that persists across sessions (orphaned fields, stale data)
+
+#### 4. Rollback Strategy
+- Can the change be reverted cleanly?
+- Are there schema migrations, API changes, or persisted data changes that make rollback non-trivial?
+- If rollback is risky, is there an incremental deployment strategy?
+
+#### 5. Blast Radius Assessment
+- Frontend-only vs cross-layer changes
+- Number of files / components affected
+- Does this touch shared utilities used by other features?
+
+**Findings Format:**
+```
+- **Risk**: [Description of what could go wrong]
+  - **Likelihood**: High / Medium / Low
+  - **Impact**: High / Medium / Low
+  - **Mitigation**: [Specific action to take]
+  - **Detection**: [How would we know this happened?]
+```
+
+---
+
 ## Output Format
 
 ```markdown
@@ -147,6 +192,27 @@ For each gap:
 |-------------------|-----------------------|
 | ... | ... |
 
+---
+
+### Pass 3: Risk Mitigation Review
+
+#### Failure Mode Analysis
+| Code Path | Failure Mode | Severity | Mitigation |
+|-----------|-------------|----------|------------|
+| ... | ... | ... | ... |
+
+#### Rollback Assessment
+- **Rollback complexity**: Trivial / Moderate / Complex
+- **Reason**: ...
+- **Recommended strategy**: ...
+
+#### Risk Register
+| # | Risk | Likelihood | Impact | Mitigation | Detection |
+|---|------|-----------|--------|------------|-----------|
+| 1 | ... | ... | ... | ... | ... |
+
+---
+
 ### Verdict
 APPROVE / REVISE (with specific items to address)
 ```
@@ -157,4 +223,5 @@ APPROVE / REVISE (with specific items to address)
 2. Read referenced source files (schema.ts, existing code, skills)
 3. Run Pass 1 (Engineering Review)
 4. Run Pass 2 (SDET Review)
-5. Combine into final output with verdict
+5. Run Pass 3 (Risk Mitigation)
+6. Combine into final output with verdict (all 3 passes must approve)

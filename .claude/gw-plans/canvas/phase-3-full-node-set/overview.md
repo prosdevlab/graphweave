@@ -1,12 +1,35 @@
 # Canvas Phase 3 — Full Node Set + Settings Page
 
+**Status: Complete** (merged to main 2026-03-18)
+
 ## Goal
 
 Add Tool, Condition, and HumanInput node components to the canvas so users can
 build complete graphs visually. Add a settings page showing provider status.
 After this phase, every node type in GraphSchema is drawable and configurable.
 
-## What already exists
+## What was delivered
+
+Phase 3 expanded significantly beyond the original scope during implementation.
+In addition to the 6 planned parts, the following were pulled forward from
+Phase 4 and delivered:
+
+### Pulled forward from Phase 4
+
+| Feature | Files | Why |
+|---------|-------|-----|
+| **Run input dialog** — schema-driven form/JSON modal | `RunInputDialog.tsx`, `RunFormFields.tsx`, `runInputUtils.ts` | Tool nodes are unusable without a way to provide initial state |
+| **Consumed-fields logic** — only show fields that nodes actually read | `runInputUtils.ts` (`getConsumedInputFields`) | Without this, dialog shows every state field including internal ones |
+| **Field hints + presets** — tool-aware descriptions, type-filtered dropdowns | `runInputUtils.ts` (`buildFieldHints`), `presetUtils.ts` | Core UX for mapping params to state fields |
+| **Graph traversal utilities** — upstream BFS, relevant fields, terminal detection | `graphTraversal.ts` | Context-aware dropdown filtering in ToolNodeConfig |
+| **Two-tier ToolNodeConfig** — collapsed summary / expanded card views | `ToolNodeConfig.tsx` | Auto-mapped params need a compact view; editing needs detail |
+| **Auto-map** — automatic param→state field matching with field creation | `presetUtils.ts` (`autoMapParams`) | Eliminates manual wiring for simple graphs |
+| **Reducer-aware classification** — append/merge fields stay as user inputs | `runInputUtils.ts` (`classifyFields`) | LLM default `output_key: "messages"` was hiding the messages input |
+| **Combobox UI** — cmdk-based searchable dropdown | `Combobox.tsx`, `Command.tsx`, `Popover.tsx` | Run dialog field selection |
+| **Skip-dialog for zero-input graphs** — run immediately when no inputs needed | `CanvasHeader.tsx` (uncommitted) | UX: `Start → Tool → End` shouldn't prompt for input |
+| **Pydantic model_dump in state_utils** — LangChain message object support | `state_utils.py` (uncommitted) | `messages[-1].content` expressions failed on Pydantic objects |
+
+### Originally planned (all complete)
 
 | Layer | Status |
 |-------|--------|
@@ -16,8 +39,8 @@ After this phase, every node type in GraphSchema is drawable and configurable.
 | `GET /settings/providers` endpoint | Returns configured status per provider |
 | BaseNodeShell, StartNode, LLMNode, EndNode components | Complete |
 | Config panel pattern (NodeConfigPanel, LLMNodeConfig) | Complete |
-| NODE_DEFAULTS, TOOLBAR_ITEMS, nodeTypes | Only start/llm/end registered |
-| Client-side validation (validateGraph) | Only start/end/llm rules |
+| NODE_DEFAULTS, TOOLBAR_ITEMS, nodeTypes | All 6 types registered |
+| Client-side validation (validateGraph) | All node types covered |
 
 ## Architecture
 
@@ -112,24 +135,35 @@ Model fetching is Phase 4+ (endpoint currently returns empty models arrays).
 
 ## Parts
 
-| Part | Summary | Depends on |
-|------|---------|------------|
-| 3.1 | [Node defaults + toolbar](phase-3.1-node-defaults-toolbar.md) -- Register 3 new node types | -- |
-| 3.2 | [ToolNode config](phase-3.2-tool-node-config.md) -- Tool select, input_map editor, output_key | 3.1 |
-| 3.3 | [ConditionNode config + edge wiring](phase-3.3-condition-node-config.md) -- 6 condition types, branch edges | 3.1 |
-| 3.4 | [HumanInputNode config](phase-3.4-human-input-node-config.md) -- Prompt, input_key, timeout | 3.1 |
-| 3.5 | [Validation rules](phase-3.5-validation.md) -- Client-side rules for new nodes | 3.2, 3.3, 3.4 |
-| 3.6 | [Settings page](phase-3.6-settings-page.md) -- Provider status + tool list | 3.2 (settingsSlice) |
+| Part | Summary | Status |
+|------|---------|--------|
+| 3.1 | [Node defaults + toolbar](phase-3.1-node-defaults-toolbar.md) -- Register 3 new node types | Complete |
+| 3.2 | [ToolNode config](phase-3.2-tool-node-config.md) -- Tool select, input_map editor, output_key | Complete (expanded: two-tier UI, auto-map, presets, graph traversal) |
+| 3.3 | [ConditionNode config + edge wiring](phase-3.3-condition-node-config.md) -- 6 condition types, branch edges | Complete |
+| 3.4 | [HumanInputNode config](phase-3.4-human-input-node-config.md) -- Prompt, input_key, timeout | Complete |
+| 3.5 | [Validation rules](phase-3.5-validation.md) -- Client-side rules for new nodes | Complete |
+| 3.6 | [Settings page](phase-3.6-settings-page.md) -- Provider status + tool list | Complete |
 
-## Out of scope (Phase 4+)
+## Remaining for Phase 4
 
-- **State panel** (Phase 4) -- full state field management, input_map visual wiring
+Items originally scoped as Phase 4 that were NOT pulled forward:
+
+- **State panel** -- full state field management UI (add/remove/reorder fields, configure reducers)
+- **LLM input_map wiring** -- LLM nodes currently show "State wiring coming soon"; need input_map + output_key config like Tool nodes have
 - **Model fetching** from providers -- settings/providers currently returns empty models[]
 - **Custom edge components** -- edges use default React Flow rendering with labels
-- **Condition branch auto-creation** -- users create edges manually
-- **Run input modal** (Phase 4) -- schema-driven form for providing run input
 - **Debug panel** (Phase 5) -- per-node state inspection during runs
 - **LLM router condition wizard** -- users fill in the form fields directly
+
+### Known architectural debt (from Phase 3)
+
+- **LLM default `output_key: "messages"`** — LLM nodes should write to a
+  dedicated field (e.g. `llm_response`) and the execution layer should append
+  to `messages`. Currently `classifyFields` works around this with reducer-aware
+  filtering. See TODOs in `nodeDefaults.ts` and `runInputUtils.ts`.
+- **Tool result not auto-wired to LLM** — In `Start → Tool → LLM → End`, the
+  LLM's empty `input_map` means `tool_result` never reaches the LLM. Requires
+  the State panel + LLM input_map config to fix properly.
 
 ## Architecture constraints
 
