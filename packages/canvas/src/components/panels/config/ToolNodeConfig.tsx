@@ -19,6 +19,10 @@ import {
   useState,
 } from "react";
 import {
+  getRelevantFields,
+  isTerminalNode,
+} from "../../../utils/graphTraversal";
+import {
   type InputMapRow,
   autoMapParams,
   buildPresetsForParam,
@@ -52,7 +56,8 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
   const toolsError = useSettingsStore((s) => s.toolsError);
   const loadTools = useSettingsStore((s) => s.loadTools);
   const stateFields = useGraphStore((s) => s.graph?.state ?? []);
-  const graphNodes = useGraphStore((s) => s.graph?.nodes ?? []);
+  const graphNodes = useGraphStore((s) => s.nodes);
+  const edges = useGraphStore((s) => s.edges);
   const addStateFields = useGraphStore((s) => s.addStateFields);
   const removeStateFields = useGraphStore((s) => s.removeStateFields);
 
@@ -67,6 +72,23 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
     () => buildPresetsForParam(stateFields),
     [stateFields],
   );
+
+  const relevantFields = useMemo(
+    () => getRelevantFields(node.id, stateFields, graphNodes, edges),
+    [node.id, stateFields, graphNodes, edges],
+  );
+
+  const isTerminal = useMemo(
+    () => isTerminalNode(node.id, edges, graphNodes),
+    [node.id, edges, graphNodes],
+  );
+
+  // Auto-reset empty output_key when hidden to avoid silent validation errors
+  useEffect(() => {
+    if (isTerminal && !node.config.output_key.trim()) {
+      onChange({ config: { output_key: "tool_result" } });
+    }
+  }, [isTerminal, node.config.output_key, onChange]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on node.id to reset rows only when switching nodes, not on every keystroke
   useEffect(() => {
@@ -333,7 +355,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                   : undefined;
 
                 const filteredPresets = buildPresetsForParam(
-                  stateFields,
+                  relevantFields,
                   paramInfo?.type,
                 );
                 const defaultDisplay =
@@ -454,20 +476,22 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
         </div>
       )}
 
-      <div>
-        <label
-          htmlFor="node-output-key"
-          className="mb-1 block text-xs font-medium text-zinc-400"
-        >
-          Result saved to
-        </label>
-        <Input
-          id="node-output-key"
-          value={node.config.output_key}
-          onChange={handleOutputKeyChange}
-          placeholder="tool_result"
-        />
-      </div>
+      {!isTerminal && (
+        <div>
+          <label
+            htmlFor="node-output-key"
+            className="mb-1 block text-xs font-medium text-zinc-400"
+          >
+            Result saved to
+          </label>
+          <Input
+            id="node-output-key"
+            value={node.config.output_key}
+            onChange={handleOutputKeyChange}
+            placeholder="tool_result"
+          />
+        </div>
+      )}
     </div>
   );
 }
