@@ -83,6 +83,27 @@ describe("classifyFields", () => {
     expect(outputKeys).toContain("tool_result");
   });
 
+  it("keeps merge-reducer fields in inputFields even when a node writes to them", () => {
+    const mergeOutputField: StateField = {
+      key: "meta",
+      type: "object",
+      reducer: "merge",
+    };
+    const state = [messagesField, mergeOutputField];
+    const nodes: NodeSchema[] = [
+      {
+        id: "n1",
+        type: "tool",
+        label: "Tool",
+        position: { x: 0, y: 0 },
+        config: { tool_name: "enricher", input_map: {}, output_key: "meta" },
+      },
+    ];
+    const { inputFields, outputKeys } = classifyFields(state, nodes);
+    expect(inputFields).toContainEqual(mergeOutputField);
+    expect(outputKeys).toContain("meta");
+  });
+
   it("keeps append-reducer fields in inputFields even when a node writes to them", () => {
     // messages reducer is "append" — multiple contributors allowed
     const state = [messagesField, toolResultField];

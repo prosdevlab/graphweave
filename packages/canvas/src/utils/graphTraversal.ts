@@ -1,6 +1,6 @@
 import type { EdgeSchema, NodeSchema, StateField } from "@shared/schema";
 
-/** BFS backward walk — returns all ancestor node IDs of `nodeId`. */
+/** Backward walk — returns all ancestor node IDs of `nodeId`. */
 export function getUpstreamNodeIds(
   nodeId: string,
   edges: EdgeSchema[],
