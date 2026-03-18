@@ -132,6 +132,25 @@ describe("classifyFields", () => {
     expect(inputFields).toEqual([messagesField, queryField]);
     expect(outputKeys.size).toBe(0);
   });
+
+  it("returns outputKeyWriters mapping output_key to node label", () => {
+    const state = [messagesField, toolResultField];
+    const nodes: NodeSchema[] = [
+      {
+        id: "n1",
+        type: "tool",
+        label: "Search",
+        position: { x: 0, y: 0 },
+        config: {
+          tool_name: "web_search",
+          input_map: {},
+          output_key: "tool_result",
+        },
+      },
+    ];
+    const { outputKeyWriters } = classifyFields(state, nodes);
+    expect(outputKeyWriters).toEqual({ tool_result: "Search" });
+  });
 });
 
 describe("isMessagesField", () => {

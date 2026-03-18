@@ -110,15 +110,21 @@ export function buildFieldHints(
 export function classifyFields(
   state: StateField[],
   nodes: NodeSchema[],
-): { inputFields: StateField[]; outputKeys: Set<string> } {
+): {
+  inputFields: StateField[];
+  outputKeys: Set<string>;
+  outputKeyWriters: Record<string, string>;
+} {
   const outputKeys = new Set<string>();
+  const outputKeyWriters: Record<string, string> = {};
   for (const node of nodes) {
     if (node.type === "llm" || node.type === "tool") {
       outputKeys.add(node.config.output_key);
+      outputKeyWriters[node.config.output_key] = node.label;
     }
   }
   const inputFields = state.filter((f) => !outputKeys.has(f.key));
-  return { inputFields, outputKeys };
+  return { inputFields, outputKeys, outputKeyWriters };
 }
 
 export function isMessagesField(field: StateField): boolean {

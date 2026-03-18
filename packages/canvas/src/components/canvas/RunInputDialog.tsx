@@ -36,7 +36,7 @@ export function RunInputDialog({
   const [parseError, setParseError] = useState<string | null>(null);
   const [prefilledKeys, setPrefilledKeys] = useState<Set<string>>(new Set());
 
-  const { inputFields, outputKeys } = classifyFields(
+  const { inputFields, outputKeys, outputKeyWriters } = classifyFields(
     graph?.state ?? [],
     graph?.nodes ?? [],
   );
@@ -192,6 +192,7 @@ export function RunInputDialog({
           <RunFormFields
             inputFields={inputFields}
             outputKeys={outputKeys}
+            outputKeyWriters={outputKeyWriters}
             values={formValues}
             onChange={handleFormChange}
             fieldHints={fieldHints}
