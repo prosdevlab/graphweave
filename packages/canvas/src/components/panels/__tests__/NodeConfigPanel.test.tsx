@@ -55,6 +55,13 @@ vi.mock("@store/graphSlice", () => ({
   useGraphStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       nodes: mockNodes,
+      edges: [],
+      graph: {
+        state: [
+          { key: "messages", type: "list", reducer: "append", readonly: true },
+          { key: "llm_response", type: "string", reducer: "replace" },
+        ],
+      },
       updateNodeConfig: mockUpdateNodeConfig,
       removeNode: mockRemoveNode,
     }),
@@ -85,7 +92,8 @@ describe("NodeConfigPanel", () => {
     mockSelectedNodeId = "l1";
     render(<NodeConfigPanel />);
     expect(screen.getByText("LLM Node")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("openai")).toBeInTheDocument();
+    // Model settings are collapsed by default; check for the section toggle
+    expect(screen.getByText("Model Settings")).toBeInTheDocument();
   });
 
   it('renders EndNodeConfig when selected node is type "end"', () => {
