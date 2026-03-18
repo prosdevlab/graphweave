@@ -31,7 +31,7 @@ describe("graphSlice", () => {
     const { graph } = useGraphStore.getState();
     expect(graph).not.toBeNull();
     expect(graph?.name).toBe("Test");
-    expect(graph?.state).toHaveLength(2);
+    expect(graph?.state).toHaveLength(3);
     expect(graph?.state[0] ?? {}).toMatchObject({
       key: "messages",
       type: "list",
@@ -39,6 +39,11 @@ describe("graphSlice", () => {
       readonly: true,
     });
     expect(graph?.state[1] ?? {}).toMatchObject({
+      key: "user_input",
+      type: "string",
+      reducer: "replace",
+    });
+    expect(graph?.state[2] ?? {}).toMatchObject({
       key: "llm_response",
       type: "string",
       reducer: "replace",
