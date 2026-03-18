@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   autoMapParams,
   buildPresetsForParam,
+  isEnumLike,
   resolveSourceLabel,
   toRecord,
 } from "../presetUtils";
@@ -96,6 +97,38 @@ describe("buildPresetsForParam", () => {
   });
 });
 
+// -- isEnumLike -----------------------------------------------------------
+
+describe("isEnumLike", () => {
+  it("returns true for 2-5 short examples", () => {
+    expect(isEnumLike({ examples: ["now", "format", "parse"] })).toBe(true);
+    expect(isEnumLike({ examples: ["a", "b"] })).toBe(true);
+    expect(isEnumLike({ examples: ["a", "b", "c", "d", "e"] })).toBe(true);
+  });
+
+  it("returns false for 0 or 1 example", () => {
+    expect(isEnumLike({ examples: [] })).toBe(false);
+    expect(isEnumLike({ examples: ["only"] })).toBe(false);
+  });
+
+  it("returns false for more than 5 examples", () => {
+    expect(isEnumLike({ examples: ["a", "b", "c", "d", "e", "f"] })).toBe(
+      false,
+    );
+  });
+
+  it("returns false if any example is longer than 20 chars", () => {
+    expect(
+      isEnumLike({ examples: ["short", "this_is_a_very_long_value_indeed"] }),
+    ).toBe(false);
+  });
+
+  it("returns false for null or undefined examples", () => {
+    expect(isEnumLike({ examples: null })).toBe(false);
+    expect(isEnumLike({})).toBe(false);
+  });
+});
+
 // -- resolveSourceLabel ---------------------------------------------------
 
 describe("resolveSourceLabel", () => {
@@ -109,6 +142,14 @@ describe("resolveSourceLabel", () => {
 
   it("returns 'default' for __default__ without defaultValue", () => {
     expect(resolveSourceLabel("__default__", [])).toBe("default");
+  });
+
+  it("returns 'user input' for user_input stateKey", () => {
+    expect(resolveSourceLabel("user_input", [])).toBe("user input");
+  });
+
+  it("returns 'default (now)' for quoted literal '\"now\"'", () => {
+    expect(resolveSourceLabel('"now"', [])).toBe("default (now)");
   });
 
   it("returns the field key for known field keys", () => {
@@ -151,12 +192,137 @@ describe("autoMapParams", () => {
     expect(result.newFields).toHaveLength(0);
   });
 
-  it("uses messages[-1].content fallback for first unmatched string param", () => {
+  it("maps first required non-enum string param to user_input", () => {
     const result = autoMapParams(
       [{ name: "url", type: "string", required: true, description: "URL" }],
       [messagesField],
     );
-    expect(result.map.url).toBe("messages[-1].content");
+    expect(result.map.url).toBe("user_input");
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0]).toMatchObject({
+      key: "user_input",
+      type: "string",
+      reducer: "replace",
+    });
+  });
+
+  it("skips enum-like params for user_input", () => {
+    const result = autoMapParams(
+      [
+        {
+          name: "action",
+          type: "string",
+          required: true,
+          description: "Action",
+          examples: ["now", "format", "parse"],
+        },
+      ],
+      [messagesField],
+    );
+    expect(result.map.action).not.toBe("user_input");
+  });
+
+  it("enum-like required param with no default gets quoted literal", () => {
+    const result = autoMapParams(
+      [
+        {
+          name: "action",
+          type: "string",
+          required: true,
+          description: "Action",
+          examples: ["now", "format", "parse"],
+        },
+      ],
+      [],
+    );
+    expect(result.map.action).toBe('"now"');
+  });
+
+  it("quoted literal survives toRecord", () => {
+    const rows: InputMapRow[] = [
+      {
+        param: "action",
+        stateKey: '"now"',
+        isAutoFilled: true,
+        customMode: false,
+      },
+    ];
+    expect(toRecord(rows)).toEqual({ action: '"now"' });
+  });
+
+  it("falls back to first optional non-enum string when no required string params", () => {
+    const result = autoMapParams(
+      [
+        {
+          name: "query",
+          type: "string",
+          required: false,
+          description: "Search query",
+        },
+        {
+          name: "action",
+          type: "string",
+          required: false,
+          description: "Action",
+          examples: ["search", "summary"],
+          default: "search",
+        },
+      ],
+      [],
+    );
+    expect(result.map.query).toBe("user_input");
+    expect(result.map.action).toBe("__default__");
+  });
+
+  it("prefers required over optional for user_input", () => {
+    const result = autoMapParams(
+      [
+        {
+          name: "opt_query",
+          type: "string",
+          required: false,
+          description: "Optional query",
+        },
+        {
+          name: "req_path",
+          type: "string",
+          required: true,
+          description: "Required path",
+        },
+      ],
+      [],
+    );
+    expect(result.map.req_path).toBe("user_input");
+    expect(result.map.opt_query).not.toBe("user_input");
+  });
+
+  it("reuses existing user_input field instead of creating duplicate", () => {
+    const userInputField: StateField = {
+      key: "user_input",
+      type: "string",
+      reducer: "replace",
+    };
+    const result = autoMapParams(
+      [{ name: "url", type: "string", required: true, description: "URL" }],
+      [userInputField],
+    );
+    expect(result.map.url).toBe("user_input");
+    expect(result.newFields).toHaveLength(0);
+  });
+
+  it("does not create user_input when exact match exists", () => {
+    const result = autoMapParams(
+      [
+        {
+          name: "query",
+          type: "string",
+          required: true,
+          description: "Search query",
+        },
+      ],
+      [queryField],
+    );
+    expect(result.map.query).toBe("query");
     expect(result.newFields).toHaveLength(0);
   });
 
@@ -213,7 +379,7 @@ describe("autoMapParams", () => {
     expect(result.newFields).toHaveLength(0);
   });
 
-  it("second unmatched string param auto-creates after messages is taken", () => {
+  it("first param gets user_input, second required string auto-creates", () => {
     const result = autoMapParams(
       [
         {
@@ -229,12 +395,13 @@ describe("autoMapParams", () => {
           description: "Content",
         },
       ],
-      [messagesField],
+      [],
     );
-    expect(result.map.path).toBe("messages[-1].content");
+    expect(result.map.path).toBe("user_input");
     expect(result.map.content).toBe("content");
-    expect(result.newFields).toHaveLength(1);
-    expect(result.newFields[0]?.key).toBe("content");
+    expect(result.newFields).toHaveLength(2);
+    expect(result.newFields.map((f) => f.key)).toContain("user_input");
+    expect(result.newFields.map((f) => f.key)).toContain("content");
   });
 
   it("optional param with incompatible name collision uses __default__", () => {
@@ -256,6 +423,104 @@ describe("autoMapParams", () => {
       [stringCountField],
     );
     expect(result.map.count).toBe("__default__");
+  });
+
+  it("file_write: path gets user_input, content auto-created, mode gets __default__", () => {
+    const result = autoMapParams(
+      [
+        {
+          name: "path",
+          type: "string",
+          required: true,
+          description: "File path",
+        },
+        {
+          name: "content",
+          type: "string",
+          required: true,
+          description: "Content to write",
+        },
+        {
+          name: "mode",
+          type: "string",
+          required: false,
+          description: "Write mode",
+          default: "overwrite",
+          examples: ["overwrite", "append"],
+        },
+      ],
+      [],
+    );
+    expect(result.map.path).toBe("user_input");
+    expect(result.map.content).toBe("content");
+    expect(result.map.mode).toBe("__default__");
+    expect(result.newFields.map((f) => f.key)).toContain("user_input");
+    expect(result.newFields.map((f) => f.key)).toContain("content");
+  });
+
+  it("datetime full mapping: enum action gets quoted literal, others unmapped", () => {
+    // datetime has a required enum-like string (action) — no required non-enum string
+    // and since a required string param exists, optional fallback is NOT used
+    const result = autoMapParams(
+      [
+        {
+          name: "action",
+          type: "string",
+          required: true,
+          description: "Action to perform",
+          examples: ["now", "format", "parse"],
+        },
+        {
+          name: "date",
+          type: "string",
+          required: false,
+          description: "Date string",
+        },
+        {
+          name: "fmt",
+          type: "string",
+          required: false,
+          description: "Format string",
+        },
+      ],
+      [],
+    );
+    expect(result.map.action).toBe('"now"');
+    expect(result.map.date).toBe("");
+    expect(result.map.fmt).toBe("");
+    expect(result.newFields).toHaveLength(0);
+  });
+
+  it("wikipedia full mapping: query gets user_input, action gets __default__, title unmapped", () => {
+    // wikipedia has no required string params → optional fallback runs
+    const result = autoMapParams(
+      [
+        {
+          name: "query",
+          type: "string",
+          required: false,
+          description: "Search query",
+        },
+        {
+          name: "action",
+          type: "string",
+          required: false,
+          description: "Action",
+          default: "search",
+          examples: ["search", "summary"],
+        },
+        {
+          name: "title",
+          type: "string",
+          required: false,
+          description: "Article title",
+        },
+      ],
+      [],
+    );
+    expect(result.map.query).toBe("user_input");
+    expect(result.map.action).toBe("__default__");
+    expect(result.map.title).toBe("");
   });
 });
 
@@ -303,5 +568,17 @@ describe("toRecord", () => {
       },
     ];
     expect(toRecord(rows)).toEqual({});
+  });
+
+  it("keeps quoted literal stateKeys (not stripped like __default__)", () => {
+    const rows: InputMapRow[] = [
+      {
+        param: "action",
+        stateKey: '"now"',
+        isAutoFilled: true,
+        customMode: false,
+      },
+    ];
+    expect(toRecord(rows)).toEqual({ action: '"now"' });
   });
 });

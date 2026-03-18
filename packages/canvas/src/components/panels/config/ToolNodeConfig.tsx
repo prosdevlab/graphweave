@@ -8,7 +8,6 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
-  Plus,
   X,
 } from "lucide-react";
 import {
@@ -25,6 +24,7 @@ import {
   buildPresetsForParam,
   getExpressionYieldType,
   getMappingWarning,
+  isEnumLike,
   resolveSourceLabel,
   toRecord,
 } from "./presetUtils";
@@ -193,14 +193,6 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
     [rows, onChange],
   );
 
-  const handleAddRow = useCallback(() => {
-    const updated = [
-      ...rows,
-      { param: "", stateKey: "", isAutoFilled: false, customMode: false },
-    ];
-    setRows(updated);
-  }, [rows]);
-
   const handleRemoveRow = useCallback(
     (index: number) => {
       const updated = rows.filter((_, i) => i !== index);
@@ -270,11 +262,13 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                 );
                 const mapped = row.stateKey !== "";
                 const isAutoCreated = autoCreatedKeys.includes(row.stateKey);
+                const defaultDisplay =
+                  paramInfo?.default ?? paramInfo?.examples?.[0] ?? null;
                 const label =
                   resolveSourceLabel(
                     row.stateKey,
                     stateFields,
-                    paramInfo?.default ?? null,
+                    defaultDisplay,
                   ) + (isAutoCreated ? " (auto)" : "");
                 return (
                   // biome-ignore lint/suspicious/noArrayIndexKey: position-based rows
@@ -327,9 +321,10 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                   stateFields,
                   paramInfo?.type,
                 );
+                const defaultDisplay =
+                  paramInfo?.default ?? paramInfo?.examples?.[0];
                 const hasDefault =
-                  paramInfo?.default !== undefined &&
-                  paramInfo.default !== null;
+                  defaultDisplay !== undefined && defaultDisplay !== null;
 
                 const yieldType = getExpressionYieldType(
                   row.stateKey,
@@ -347,8 +342,10 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                   ? "__custom__"
                   : row.stateKey === "__default__"
                     ? "__default__"
-                    : (filteredPresets.find((p) => p.value === row.stateKey)
-                        ?.value ?? "");
+                    : /^"[^"]*"$/.test(row.stateKey)
+                      ? row.stateKey
+                      : (filteredPresets.find((p) => p.value === row.stateKey)
+                          ?.value ?? "");
 
                 const cardCls =
                   "space-y-1.5 rounded border border-zinc-800 p-2.5";
@@ -402,8 +399,14 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                     >
                       <option value="">Select source…</option>
                       {hasDefault && (
-                        <option value="__default__">
-                          — Use default ({paramInfo?.default}) —
+                        <option
+                          value={
+                            paramInfo?.default != null
+                              ? "__default__"
+                              : `"${defaultDisplay}"`
+                          }
+                        >
+                          — Use default ({defaultDisplay}) —
                         </option>
                       )}
                       {filteredPresets.map((p) => (
@@ -419,7 +422,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                         onChange={(e) =>
                           handleCustomInputChange(i, e.target.value)
                         }
-                        placeholder="messages[-1].content"
+                        placeholder="state_field_name"
                       />
                     )}
                     {mappingWarning && (
@@ -431,17 +434,6 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                   </div>
                 );
               })}
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleAddRow}
-                  className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200"
-                >
-                  <Plus size={12} />
-                  Add custom param
-                </button>
-              </div>
             </div>
           )}
         </div>
