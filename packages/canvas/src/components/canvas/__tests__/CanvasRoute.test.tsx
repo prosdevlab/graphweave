@@ -70,6 +70,10 @@ vi.mock("../../panels/RunPanel", () => ({
   RunPanel: () => <div data-testid="run-panel">RunPanel</div>,
 }));
 
+vi.mock("../../panels/StatePanel", () => ({
+  StatePanel: () => <div data-testid="state-panel">StatePanel</div>,
+}));
+
 beforeEach(() => {
   mockGraph = null;
   mockSaveError = null;

@@ -7,6 +7,7 @@ import { Link, useParams } from "react-router";
 import { useBeforeUnload } from "../../hooks/useBeforeUnload";
 import { NodeConfigPanel } from "../panels/NodeConfigPanel";
 import { RunPanel } from "../panels/RunPanel";
+import { StatePanel } from "../panels/StatePanel";
 import { CanvasHeader } from "./CanvasHeader";
 import { GraphCanvas } from "./GraphCanvas";
 
@@ -57,6 +58,7 @@ export function CanvasRoute() {
           <CanvasHeader />
           <main className="relative h-[calc(100vh-3rem)]">
             <GraphCanvas />
+            <StatePanel />
             <NodeConfigPanel />
             <RunPanel />
           </main>
