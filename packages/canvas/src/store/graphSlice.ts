@@ -16,6 +16,7 @@ import { create } from "zustand";
 
 const DEFAULT_STATE: StateField[] = [
   { key: "messages", type: "list", reducer: "append", readonly: true },
+  { key: "user_input", type: "string", reducer: "replace" },
   { key: "llm_response", type: "string", reducer: "replace" },
 ];
 
