@@ -67,6 +67,18 @@ vi.mock("@store/graphSlice", () => ({
     }),
 }));
 
+vi.mock("@store/settingsSlice", () => ({
+  useSettingsStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      providers: null,
+      loadProviders: vi.fn(),
+      tools: [],
+      toolsLoaded: true,
+      toolsError: null,
+      loadTools: vi.fn(),
+    }),
+}));
+
 beforeEach(() => {
   mockNodes = [startNode, llmNode, endNode];
   mockSelectedNodeId = null;
