@@ -14,6 +14,7 @@ import {
 import { useNavigate } from "react-router";
 import { validateGraph } from "../../utils/validateGraph";
 import { RunInputDialog } from "./RunInputDialog";
+import { getConsumedInputFields } from "./runInputUtils";
 
 function CanvasHeaderComponent() {
   const graph = useGraphStore((s) => s.graph);
@@ -97,7 +98,20 @@ function CanvasHeaderComponent() {
       }
     }
 
-    setInputDialogOpen(true);
+    const graph = useGraphStore.getState().graph;
+    const { consumedFields } = getConsumedInputFields(
+      graph?.state ?? [],
+      graph?.nodes ?? [],
+    );
+
+    if (consumedFields.length === 0) {
+      // No user input needed — run immediately
+      if (graph) {
+        useRunStore.getState().startRun(graph.id, {});
+      }
+    } else {
+      setInputDialogOpen(true);
+    }
   }, []);
 
   const handleRunSubmit = useCallback(

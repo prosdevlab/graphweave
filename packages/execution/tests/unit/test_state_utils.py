@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 
 from app.state_utils import InputMapError, resolve_input_map
 
@@ -40,3 +41,16 @@ def test_invalid_expression_raises():
     state = {"foo": "bar"}
     with pytest.raises(InputMapError):
         resolve_input_map({"x": "foo @@@ bar"}, state)
+
+
+def test_pydantic_model_attribute_access():
+    """LangChain message objects (Pydantic models) must be accessible via
+    attribute expressions like ``messages[-1].content``."""
+
+    class FakeMessage(BaseModel):
+        content: str
+        role: str = "user"
+
+    state = {"messages": [FakeMessage(content="https://example.com")]}
+    result = resolve_input_map({"url": "messages[-1].content"}, state)
+    assert result == {"url": "https://example.com"}
