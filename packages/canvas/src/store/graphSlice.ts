@@ -69,6 +69,8 @@ export interface GraphSlice {
     newEdge2: EdgeSchema,
   ) => void;
   removeNodes: (ids: string[]) => void;
+  addStateFields: (fields: StateField[]) => void;
+  removeStateFields: (keys: string[]) => void;
   newGraph: (name: string) => void;
   renameGraph: (name: string) => void;
   updateNodeConfig: (
@@ -140,6 +142,31 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
       dirty: true,
     }));
   },
+
+  addStateFields: (fields) =>
+    set((s) => {
+      if (!s.graph) return {};
+      const existing = new Set(s.graph.state.map((f) => f.key));
+      const fresh = fields.filter((f) => !existing.has(f.key));
+      if (fresh.length === 0) return {};
+      return {
+        graph: { ...s.graph, state: [...s.graph.state, ...fresh] },
+        dirty: true,
+      };
+    }),
+
+  removeStateFields: (keys) =>
+    set((s) => {
+      if (!s.graph) return {};
+      const remove = new Set(keys);
+      return {
+        graph: {
+          ...s.graph,
+          state: s.graph.state.filter((f) => !remove.has(f.key)),
+        },
+        dirty: true,
+      };
+    }),
 
   newGraph: (name) => {
     const { nodes, edges } = createStarterNodes();
