@@ -124,19 +124,10 @@ export function classifyFields(
     }
   }
 
-  // Use reducer semantics to determine which fields are user inputs:
-  //   replace — a node fully owns the field; exclude it from user inputs.
-  //   append / merge — the field has multiple contributors. A node writing
-  //     to it does not prevent the user from providing an initial value.
-  //     The canonical example is `messages` (reducer: "append"): the LLM
-  //     appends its response, but the user still provides the first message.
-  //
-  // TODO (long-term): LLM nodes should not default to output_key: "messages".
-  //   They should write to a dedicated field (e.g. "llm_response") and the
-  //   execution layer merges it back into the conversation buffer. This would
-  //   make the replace/append distinction here irrelevant for the common case,
-  //   and the state panel (coming soon) is the right place to configure it.
-  //   See: nodeDefaults.ts (llm.config.output_key).
+  // Fields with append/merge reducers have multiple contributors — a node
+  // writing to them does not prevent the user from providing an initial
+  // value (e.g. messages: the user provides the first message, nodes append).
+  // Only replace-reducer output fields are fully owned by a node.
   const inputFields = state.filter(
     (f) => !outputKeys.has(f.key) || f.reducer !== "replace",
   );

@@ -321,7 +321,11 @@ def _make_llm_node(node_id: str, config: dict, llm) -> Callable:
                 messages.append(HumanMessage(content="Begin."))
 
         response = await llm.ainvoke(messages)
-        return {config["output_key"]: response.content}
+        result = {config["output_key"]: response.content}
+        # Maintain conversation buffer when writing to a dedicated field
+        if config["output_key"] != "messages" and "messages" in state:
+            result["messages"] = [response]
+        return result
 
     llm_node.__name__ = f"llm_{node_id}"
     return llm_node
