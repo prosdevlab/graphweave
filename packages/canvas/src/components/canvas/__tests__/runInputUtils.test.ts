@@ -181,6 +181,36 @@ describe("classifyFields", () => {
     expect(outputKeys.size).toBe(0);
   });
 
+  it("LLM with output_key llm_response — messages stays in inputFields, llm_response excluded", () => {
+    const llmResponseField: StateField = {
+      key: "llm_response",
+      type: "string",
+      reducer: "replace",
+    };
+    const state = [messagesField, llmResponseField];
+    const nodes: NodeSchema[] = [
+      {
+        id: "n1",
+        type: "llm",
+        label: "LLM",
+        position: { x: 0, y: 0 },
+        config: {
+          provider: "gemini",
+          model: "gemini-2.0-flash",
+          system_prompt: "",
+          temperature: 0.7,
+          max_tokens: 1024,
+          input_map: {},
+          output_key: "llm_response",
+        },
+      },
+    ];
+    const { inputFields, outputKeys } = classifyFields(state, nodes);
+    expect(inputFields).toContainEqual(messagesField);
+    expect(inputFields).not.toContainEqual(llmResponseField);
+    expect(outputKeys).toContain("llm_response");
+  });
+
   it("returns outputKeyWriters mapping output_key to node label", () => {
     const state = [messagesField, toolResultField];
     const nodes: NodeSchema[] = [
@@ -950,6 +980,35 @@ describe("getConsumedInputFields", () => {
       ];
       const state: StateField[] = [messagesField, summaryField];
       const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([messagesField]);
+    });
+
+    it("LLM with output_key llm_response and empty input_map → messages in consumedFields", () => {
+      const llmResponseField: StateField = {
+        key: "llm_response",
+        type: "string",
+        reducer: "replace",
+      };
+      const nodes: NodeSchema[] = [
+        {
+          id: "l1",
+          type: "llm",
+          label: "LLM",
+          position: { x: 0, y: 0 },
+          config: {
+            provider: "gemini",
+            model: "gemini-2.0-flash",
+            system_prompt: "",
+            temperature: 0.7,
+            max_tokens: 1024,
+            input_map: {},
+            output_key: "llm_response",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField, llmResponseField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      // messages consumed (LLM implicit read), llm_response excluded (replace output)
       expect(consumedFields).toEqual([messagesField]);
     });
 

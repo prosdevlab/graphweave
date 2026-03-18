@@ -26,17 +26,22 @@ beforeEach(() => {
 });
 
 describe("graphSlice", () => {
-  it("newGraph creates a graph with default state (messages field)", () => {
+  it("newGraph creates a graph with default state", () => {
     useGraphStore.getState().newGraph("Test");
     const { graph } = useGraphStore.getState();
     expect(graph).not.toBeNull();
     expect(graph?.name).toBe("Test");
-    expect(graph?.state).toHaveLength(1);
+    expect(graph?.state).toHaveLength(2);
     expect(graph?.state[0] ?? {}).toMatchObject({
       key: "messages",
       type: "list",
       reducer: "append",
       readonly: true,
+    });
+    expect(graph?.state[1] ?? {}).toMatchObject({
+      key: "llm_response",
+      type: "string",
+      reducer: "replace",
     });
   });
 

@@ -16,6 +16,7 @@ import { create } from "zustand";
 
 const DEFAULT_STATE: StateField[] = [
   { key: "messages", type: "list", reducer: "append", readonly: true },
+  { key: "llm_response", type: "string", reducer: "replace" },
 ];
 
 /** Pre-places Start + End connected by an edge so the user isn't staring at a blank canvas. */
@@ -162,7 +163,7 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
       return {
         graph: {
           ...s.graph,
-          state: s.graph.state.filter((f) => !remove.has(f.key)),
+          state: s.graph.state.filter((f) => !remove.has(f.key) || f.readonly),
         },
         dirty: true,
       };
@@ -247,7 +248,7 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
           existingStateKeys.add(outputKey);
           extraStateFields.push({
             key: outputKey,
-            type: "object",
+            type: node.type === "llm" ? "string" : "object",
             reducer: "replace",
           });
         }
