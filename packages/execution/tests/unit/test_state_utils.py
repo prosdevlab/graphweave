@@ -43,6 +43,13 @@ def test_invalid_expression_raises():
         resolve_input_map({"x": "foo @@@ bar"}, state)
 
 
+def test_empty_expression_skipped():
+    """Empty expressions (unmapped optional params) should be skipped."""
+    state = {"foo": "bar"}
+    result = resolve_input_map({"x": "foo", "y": ""}, state)
+    assert result == {"x": "bar"}
+
+
 def test_pydantic_model_attribute_access():
     """LangChain message objects (Pydantic models) must be accessible via
     attribute expressions like ``messages[-1].content``."""

@@ -58,6 +58,8 @@ def resolve_input_map(input_map: dict[str, str], state: dict) -> dict:
 
     results: dict[str, object] = {}
     for field, expression in input_map.items():
+        if not expression:
+            continue  # unmapped optional param — skip
         evaluator = EvalWithCompoundTypes(names=names)
         try:
             results[field] = evaluator.eval(expression)
