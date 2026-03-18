@@ -92,6 +92,11 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     [node.id, edges, graphNodes],
   );
 
+  const filteredPresets = useMemo(
+    () => buildPresetsForParam(relevantFields),
+    [relevantFields],
+  );
+
   const allMapped = rows.length > 0 && rows.every((r) => r.stateKey !== "");
 
   // Auto-reset empty output_key when hidden to avoid silent validation errors
@@ -452,7 +457,6 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
             </button>
 
             {rows.map((row, i) => {
-              const filteredPresets = buildPresetsForParam(relevantFields);
               const yieldType = getExpressionYieldType(
                 row.stateKey,
                 row.customMode,

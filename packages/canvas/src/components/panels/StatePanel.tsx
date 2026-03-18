@@ -2,7 +2,7 @@ import { useCanvasContext } from "@contexts/CanvasContext";
 import type { NodeSchema, StateField } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Sheet } from "@ui/Sheet";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { extractRootKey } from "../canvas/runInputUtils";
 import { AddFieldForm } from "./AddFieldForm";
 import { StateFieldRow } from "./StateFieldRow";
@@ -51,9 +51,7 @@ export function StatePanel() {
   const removeStateFields = useGraphStore((s) => s.removeStateFields);
 
   const [deletedField, setDeletedField] = useState<StateField | null>(null);
-  const [undoTimer, setUndoTimer] = useState<ReturnType<
-    typeof setTimeout
-  > | null>(null);
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Compute usage for all fields at once (memoized)
   const usageMap = useMemo(() => {
@@ -72,24 +70,26 @@ export function StatePanel() {
   const handleDelete = useCallback(
     (field: StateField) => {
       removeStateFields([field.key]);
-      // Show undo toast
-      if (undoTimer) clearTimeout(undoTimer);
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
       setDeletedField(field);
-      const timer = setTimeout(() => {
+      undoTimerRef.current = setTimeout(() => {
         setDeletedField(null);
+        undoTimerRef.current = null;
       }, 5000);
-      setUndoTimer(timer);
     },
-    [removeStateFields, undoTimer],
+    [removeStateFields],
   );
 
   const handleUndo = useCallback(() => {
     if (deletedField) {
       addStateFields([deletedField]);
       setDeletedField(null);
-      if (undoTimer) clearTimeout(undoTimer);
+      if (undoTimerRef.current) {
+        clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = null;
+      }
     }
-  }, [deletedField, addStateFields, undoTimer]);
+  }, [deletedField, addStateFields]);
 
   const handleAdd = useCallback(
     (field: StateField) => {

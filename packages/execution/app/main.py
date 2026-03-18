@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import collections.abc
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -193,11 +194,13 @@ async def get_providers() -> dict:
 
     from app.models import list_anthropic_models, list_gemini_models, list_openai_models
 
-    async def _with_timeout(coro: object) -> list[str]:
+    async def _with_timeout(
+        coro: collections.abc.Awaitable[list[str]],
+    ) -> list[str]:
         try:
             return await asyncio.wait_for(coro, timeout=5.0)  # type: ignore[arg-type]
-        except TimeoutError:
-            logger.warning("Model listing timed out")
+        except (TimeoutError, Exception):
+            logger.warning("Model listing failed or timed out")
             return []
 
     openai_models, gemini_models = await asyncio.gather(
