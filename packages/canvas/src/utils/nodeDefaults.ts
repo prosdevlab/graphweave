@@ -17,6 +17,14 @@ export const NODE_DEFAULTS: Record<string, () => Partial<NodeSchema>> = {
       temperature: 0.7,
       max_tokens: 1024,
       input_map: {},
+      // TODO (long-term): this default causes `messages` to appear in
+      //   outputKeys, which would incorrectly hide it from the run dialog.
+      //   runInputUtils.classifyFields works around this today by keeping
+      //   append/merge reducer fields in inputFields regardless.
+      //   The real fix is to write LLM output to a dedicated field (e.g.
+      //   "llm_response") and have the execution layer append it to
+      //   `messages`. That requires the State panel (coming soon) to let
+      //   users configure input_map and output_key per LLM node.
       output_key: "messages",
     },
   }),

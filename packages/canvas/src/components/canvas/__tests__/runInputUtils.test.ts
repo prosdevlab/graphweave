@@ -7,6 +7,7 @@ import {
   classifyFields,
   extractRootKey,
   formValuesToInput,
+  getConsumedInputFields,
   inputToFormValues,
   isMessagesField,
 } from "../runInputUtils";
@@ -61,7 +62,7 @@ describe("classifyFields", () => {
     expect(outputKeys.size).toBe(0);
   });
 
-  it("excludes fields that are output_key of LLM or tool nodes", () => {
+  it("excludes replace-reducer fields that are output_key of tool nodes", () => {
     const state = [messagesField, toolResultField];
     const nodes: NodeSchema[] = [
       {
@@ -77,8 +78,34 @@ describe("classifyFields", () => {
       },
     ];
     const { inputFields, outputKeys } = classifyFields(state, nodes);
+    // tool_result has reducer "replace" → excluded from inputFields
     expect(inputFields).toEqual([messagesField]);
     expect(outputKeys).toContain("tool_result");
+  });
+
+  it("keeps append-reducer fields in inputFields even when a node writes to them", () => {
+    // messages reducer is "append" — multiple contributors allowed
+    const state = [messagesField, toolResultField];
+    const nodes: NodeSchema[] = [
+      {
+        id: "n1",
+        type: "llm",
+        label: "LLM",
+        position: { x: 0, y: 0 },
+        config: {
+          provider: "openai",
+          model: "gpt-4o",
+          system_prompt: "",
+          temperature: 0.7,
+          max_tokens: 1024,
+          input_map: {},
+          output_key: "messages",
+        },
+      },
+    ];
+    const { inputFields, outputKeys } = classifyFields(state, nodes);
+    expect(inputFields).toContainEqual(messagesField);
+    expect(outputKeys).toContain("messages");
   });
 
   it("collects output_key from LLM nodes", () => {
@@ -671,5 +698,496 @@ describe("formValuesToInput with prefilledKeys", () => {
       new Set(["query"]),
     );
     expect(result).toEqual({ query: "" });
+  });
+});
+
+// -- getConsumedInputFields -----------------------------------------------
+
+const userInputField: StateField = {
+  key: "user_input",
+  type: "string",
+  reducer: "replace",
+};
+
+const contentField: StateField = {
+  key: "content",
+  type: "string",
+  reducer: "replace",
+};
+
+describe("getConsumedInputFields", () => {
+  describe("core tool scenarios", () => {
+    it("calculator: all defaults → no consumed fields (skip dialog)", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Calculator",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "calculator",
+            input_map: { expression: '"2 + 2"' },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField, toolResultField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([]);
+    });
+
+    it("calculator: user_input → shows user_input field", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Calculator",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "calculator",
+            input_map: { expression: "user_input" },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        toolResultField,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([userInputField]);
+    });
+
+    it("url_fetch: user_input consumed", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Fetch",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "url_fetch",
+            input_map: { url: "user_input" },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        toolResultField,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([userInputField]);
+    });
+
+    it("datetime: only quoted literals → no consumed fields (skip dialog)", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "DateTime",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "datetime",
+            input_map: { action: '"now"' },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField, toolResultField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([]);
+    });
+
+    it("file_write: user_input + content → both consumed", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "FileWrite",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "file_write",
+            input_map: { path: "user_input", content: "content" },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        contentField,
+        toolResultField,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toContainEqual(userInputField);
+      expect(consumedFields).toContainEqual(contentField);
+      expect(consumedFields).not.toContainEqual(messagesField);
+    });
+
+    it("web_search: user_input consumed, __default__ stripped", () => {
+      // __default__ is stripped by toRecord and never appears in persisted input_map
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "WebSearch",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "web_search",
+            input_map: { query: "user_input" },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        toolResultField,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([userInputField]);
+    });
+
+    it("wikipedia: user_input consumed for optional query", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Wikipedia",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "wikipedia",
+            input_map: { query: "user_input" },
+            output_key: "tool_result",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        toolResultField,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([userInputField]);
+    });
+  });
+
+  describe("LLM node scenarios", () => {
+    it("LLM with empty input_map implicitly consumes messages", () => {
+      const resultField: StateField = {
+        key: "result",
+        type: "string",
+        reducer: "replace",
+      };
+      const nodes: NodeSchema[] = [
+        {
+          id: "l1",
+          type: "llm",
+          label: "LLM",
+          position: { x: 0, y: 0 },
+          config: {
+            provider: "openai",
+            model: "gpt-4o",
+            system_prompt: "",
+            temperature: 0.7,
+            max_tokens: 1024,
+            input_map: {},
+            output_key: "result",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField, resultField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([messagesField]);
+    });
+
+    it("LLM with explicit input_map { messages: 'messages' } consumes messages", () => {
+      const summaryField: StateField = {
+        key: "summary",
+        type: "string",
+        reducer: "replace",
+      };
+      const nodes: NodeSchema[] = [
+        {
+          id: "l1",
+          type: "llm",
+          label: "Summarizer",
+          position: { x: 0, y: 0 },
+          config: {
+            provider: "openai",
+            model: "gpt-4o",
+            system_prompt: "",
+            temperature: 0.7,
+            max_tokens: 1024,
+            input_map: { messages: "messages" },
+            output_key: "summary",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField, summaryField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([messagesField]);
+    });
+
+    it("LLM with output_key 'messages' → messages stays as input (append reducer)", () => {
+      // `messages` has reducer: "append" — a node writing to it does not
+      // prevent the user from providing the initial message. classifyFields
+      // only excludes replace-reducer fields from inputFields.
+      const nodes: NodeSchema[] = [
+        {
+          id: "l1",
+          type: "llm",
+          label: "LLM",
+          position: { x: 0, y: 0 },
+          config: {
+            provider: "openai",
+            model: "gpt-4o",
+            system_prompt: "",
+            temperature: 0.7,
+            max_tokens: 1024,
+            input_map: {},
+            output_key: "messages",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      // LLM's empty input_map implicitly consumes messages; messages stays
+      // in inputFields because its reducer is "append", not "replace".
+      expect(consumedFields).toEqual([messagesField]);
+    });
+  });
+
+  describe("multi-node scenarios", () => {
+    it("tool + LLM → union of consumed fields", () => {
+      const summaryField: StateField = {
+        key: "summary",
+        type: "string",
+        reducer: "replace",
+      };
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Fetch",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "url_fetch",
+            input_map: { url: "user_input" },
+            output_key: "tool_result",
+          },
+        },
+        {
+          id: "l1",
+          type: "llm",
+          label: "LLM",
+          position: { x: 0, y: 0 },
+          config: {
+            provider: "openai",
+            model: "gpt-4o",
+            system_prompt: "",
+            temperature: 0.7,
+            max_tokens: 1024,
+            input_map: { messages: "messages" },
+            output_key: "summary",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        toolResultField,
+        summaryField,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toContainEqual(messagesField);
+      expect(consumedFields).toContainEqual(userInputField);
+    });
+
+    it("two tools sharing same input field → field appears once", () => {
+      const r1Field: StateField = {
+        key: "r1",
+        type: "string",
+        reducer: "replace",
+      };
+      const r2Field: StateField = {
+        key: "r2",
+        type: "string",
+        reducer: "replace",
+      };
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Fetch",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "url_fetch",
+            input_map: { url: "user_input" },
+            output_key: "r1",
+          },
+        },
+        {
+          id: "t2",
+          type: "tool",
+          label: "Search",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "web_search",
+            input_map: { query: "user_input" },
+            output_key: "r2",
+          },
+        },
+      ];
+      const state: StateField[] = [
+        messagesField,
+        userInputField,
+        r1Field,
+        r2Field,
+      ];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([userInputField]);
+    });
+  });
+
+  describe("edge cases", () => {
+    it("empty state → no consumed fields", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Fetch",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "url_fetch",
+            input_map: { url: "user_input" },
+            output_key: "r",
+          },
+        },
+      ];
+      const { consumedFields } = getConsumedInputFields([], nodes);
+      expect(consumedFields).toEqual([]);
+    });
+
+    it("no nodes → no consumed fields", () => {
+      const state: StateField[] = [messagesField, queryField];
+      const { consumedFields } = getConsumedInputFields(state, []);
+      expect(consumedFields).toEqual([]);
+    });
+
+    it("start/end nodes don't contribute consumed keys", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "start",
+          type: "start",
+          label: "Start",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+        {
+          id: "end",
+          type: "end",
+          label: "End",
+          position: { x: 0, y: 0 },
+          config: {},
+        },
+      ];
+      const state: StateField[] = [messagesField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([]);
+    });
+
+    it("excludes output fields even if referenced in input_map", () => {
+      // tool1 writes tool_result; tool2 reads tool_result from input_map
+      // tool_result is in outputKeys → not in inputFields → not in consumedFields
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Tool1",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "url_fetch",
+            input_map: { url: "user_input" },
+            output_key: "tool_result",
+          },
+        },
+        {
+          id: "t2",
+          type: "tool",
+          label: "Tool2",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "web_search",
+            input_map: { query: "tool_result" },
+            output_key: "r2",
+          },
+        },
+      ];
+      const r2Field: StateField = {
+        key: "r2",
+        type: "string",
+        reducer: "replace",
+      };
+      const state: StateField[] = [toolResultField, r2Field];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).not.toContainEqual(toolResultField);
+    });
+
+    it("quoted literal extractRootKey returns quoted key (no state match)", () => {
+      // Critical path: quoted literals must NOT match any state field key
+      expect(extractRootKey('"now"')).toBe('"now"');
+    });
+
+    it("tool with empty input_map → no consumed fields", () => {
+      const nodes: NodeSchema[] = [
+        {
+          id: "t1",
+          type: "tool",
+          label: "Tool",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "url_fetch",
+            input_map: {},
+            output_key: "r",
+          },
+        },
+      ];
+      const state: StateField[] = [messagesField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([]);
+    });
+
+    it("condition node does not contribute consumed keys", () => {
+      const statusField: StateField = {
+        key: "status",
+        type: "string",
+        reducer: "replace",
+      };
+      const nodes: NodeSchema[] = [
+        {
+          id: "c1",
+          type: "condition",
+          label: "Check",
+          position: { x: 0, y: 0 },
+          config: {
+            condition: {
+              type: "field_equals",
+              field: "status",
+              value: "done",
+              branch: "done",
+            },
+            branches: { done: "end" },
+            default_branch: "end",
+          },
+        },
+      ];
+      const state: StateField[] = [statusField];
+      const { consumedFields } = getConsumedInputFields(state, nodes);
+      expect(consumedFields).toEqual([]);
+    });
   });
 });
