@@ -8,8 +8,8 @@ import {
   buildFieldHints,
   buildFormValues,
   buildScaffold,
-  classifyFields,
   formValuesToInput,
+  getConsumedInputFields,
   inputToFormValues,
   isMessagesField,
 } from "./runInputUtils";
@@ -36,12 +36,10 @@ export function RunInputDialog({
   const [parseError, setParseError] = useState<string | null>(null);
   const [prefilledKeys, setPrefilledKeys] = useState<Set<string>>(new Set());
 
-  const { inputFields, outputKeys, outputKeyWriters } = classifyFields(
-    graph?.state ?? [],
-    graph?.nodes ?? [],
-  );
+  const { consumedFields, outputKeys, outputKeyWriters } =
+    getConsumedInputFields(graph?.state ?? [], graph?.nodes ?? []);
 
-  const hasInputFields = inputFields.length > 0;
+  const hasInputFields = consumedFields.length > 0;
 
   const fieldHints = useMemo(
     () => buildFieldHints(graph?.nodes ?? [], tools),
@@ -56,7 +54,7 @@ export function RunInputDialog({
   // Reset state when dialog opens
   useEffect(() => {
     if (open) {
-      const { inputFields: fields } = classifyFields(
+      const { consumedFields: fields } = getConsumedInputFields(
         graph?.state ?? [],
         graph?.nodes ?? [],
       );
@@ -94,8 +92,12 @@ export function RunInputDialog({
 
     if (next === "json") {
       // Sync form → JSON
-      const input = formValuesToInput(formValues, inputFields, prefilledKeys);
-      const scaffold = buildScaffold(inputFields);
+      const input = formValuesToInput(
+        formValues,
+        consumedFields,
+        prefilledKeys,
+      );
+      const scaffold = buildScaffold(consumedFields);
       const merged = { ...scaffold, ...input };
       setJsonValue(JSON.stringify(merged, null, 2));
     } else {
@@ -108,15 +110,18 @@ export function RunInputDialog({
           !Array.isArray(parsed)
         ) {
           setFormValues(
-            inputToFormValues(parsed as Record<string, unknown>, inputFields),
+            inputToFormValues(
+              parsed as Record<string, unknown>,
+              consumedFields,
+            ),
           );
           setParseError(null);
         } else {
-          setFormValues(buildFormValues(inputFields));
+          setFormValues(buildFormValues(consumedFields));
           setParseError("Could not parse JSON — form reset to defaults");
         }
       } catch {
-        setFormValues(buildFormValues(inputFields));
+        setFormValues(buildFormValues(consumedFields));
         setParseError("Could not parse JSON — form reset to defaults");
       }
     }
@@ -129,7 +134,11 @@ export function RunInputDialog({
 
   const handleSubmit = () => {
     if (mode === "form") {
-      const input = formValuesToInput(formValues, inputFields, prefilledKeys);
+      const input = formValuesToInput(
+        formValues,
+        consumedFields,
+        prefilledKeys,
+      );
       onSubmit(input);
       return;
     }
@@ -190,7 +199,7 @@ export function RunInputDialog({
 
         {mode === "form" && hasInputFields ? (
           <RunFormFields
-            inputFields={inputFields}
+            inputFields={consumedFields}
             outputKeys={outputKeys}
             outputKeyWriters={outputKeyWriters}
             values={formValues}

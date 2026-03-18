@@ -31,11 +31,16 @@ def _to_namespace(obj: object) -> object:
     simpleeval resolves attribute access on objects but not on dicts.
     SimpleNamespace bridges this so expressions like ``messages[-1].content``
     work against a dict-based state.  The original state dict is never mutated.
+
+    Pydantic models (e.g. LangChain HumanMessage, AIMessage) are converted via
+    ``model_dump()`` so their fields are accessible as attributes.
     """
     if isinstance(obj, dict):
         return SimpleNamespace(**{k: _to_namespace(v) for k, v in obj.items()})
     if isinstance(obj, list):
         return [_to_namespace(item) for item in obj]
+    if hasattr(obj, "model_dump"):
+        return _to_namespace(obj.model_dump())
     return obj
 
 
