@@ -95,7 +95,7 @@ function FloatingToolbarComponent() {
             <button
               type="button"
               onClick={handleCloseClick}
-              className="flex h-10 w-full items-center justify-center rounded-t-xl bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700/80 hover:text-zinc-200"
+              className="flex h-10 w-full cursor-pointer items-center justify-center rounded-t-xl bg-zinc-800/80 text-zinc-400 hover:bg-zinc-700/80 hover:text-zinc-200"
               aria-label="Close"
             >
               <X size={16} />
@@ -108,7 +108,7 @@ function FloatingToolbarComponent() {
               <button
                 type="button"
                 onClick={handlePointerClick}
-                className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
                   isPointerActive
                     ? "bg-zinc-700/50 text-zinc-100"
                     : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
@@ -159,34 +159,16 @@ function FloatingToolbarComponent() {
                 </Tooltip>
               );
             })}
-
-            <div className="mx-1.5 border-t border-zinc-800" />
-
-            <Tooltip content="State fields" side="right">
-              <button
-                type="button"
-                onClick={() => setStatePanelOpen(!statePanelOpen)}
-                className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                  statePanelOpen
-                    ? "bg-zinc-700/50 text-zinc-100"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-                }`}
-                aria-label="State fields"
-                aria-pressed={statePanelOpen}
-              >
-                <Database size={16} />
-              </button>
-            </Tooltip>
           </div>
         </>
       ) : (
-        /* Collapsed: Pointer + CircuitBoard */
+        /* Collapsed: Pointer + Nodes + State */
         <div className="flex flex-col gap-1 p-1.5">
           <Tooltip content="Pointer" side="right">
             <button
               type="button"
               onClick={handlePointerClick}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
                 isPointerActive
                   ? "bg-zinc-700/50 text-zinc-100"
                   : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
@@ -201,10 +183,26 @@ function FloatingToolbarComponent() {
             <button
               type="button"
               onClick={handleExpandClick}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
               aria-label="Nodes"
             >
               <CircuitBoard size={16} />
+            </button>
+          </Tooltip>
+
+          <Tooltip content="State fields" side="right">
+            <button
+              type="button"
+              onClick={() => setStatePanelOpen(!statePanelOpen)}
+              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                statePanelOpen
+                  ? "bg-zinc-700/50 text-zinc-100"
+                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+              }`}
+              aria-label="State fields"
+              aria-pressed={statePanelOpen}
+            >
+              <Database size={16} />
             </button>
           </Tooltip>
         </div>
