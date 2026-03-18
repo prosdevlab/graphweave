@@ -188,18 +188,35 @@ async def get_tools() -> list[dict]:
     summary="Provider status",
 )
 async def get_providers() -> dict:
-    """Return provider configuration status. Never returns key values."""
+    """Return provider configuration status with available models."""
+    import asyncio
+
+    from app.models import list_anthropic_models, list_gemini_models, list_openai_models
+
+    async def _with_timeout(coro: object) -> list[str]:
+        try:
+            return await asyncio.wait_for(coro, timeout=5.0)  # type: ignore[arg-type]
+        except TimeoutError:
+            logger.warning("Model listing timed out")
+            return []
+
+    openai_models, gemini_models = await asyncio.gather(
+        _with_timeout(list_openai_models()),
+        _with_timeout(list_gemini_models()),
+    )
+    anthropic_models = list_anthropic_models()
+
     return {
         "openai": {
             "configured": bool(os.getenv("OPENAI_API_KEY")),
-            "models": [],
+            "models": openai_models,
         },
         "gemini": {
             "configured": bool(os.getenv("GEMINI_API_KEY")),
-            "models": [],
+            "models": gemini_models,
         },
         "anthropic": {
             "configured": bool(os.getenv("ANTHROPIC_API_KEY")),
-            "models": [],
+            "models": anthropic_models,
         },
     }

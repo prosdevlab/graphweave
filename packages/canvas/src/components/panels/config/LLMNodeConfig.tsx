@@ -1,5 +1,6 @@
 import type { LLMNode } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
+import { useSettingsStore } from "@store/settingsSlice";
 import { Input } from "@ui/Input";
 import { Select } from "@ui/Select";
 import { Textarea } from "@ui/Textarea";
@@ -34,7 +35,7 @@ import {
 
 const PROVIDERS = ["openai", "gemini", "anthropic"] as const;
 
-const MODEL_OPTIONS: Record<string, string[]> = {
+const FALLBACK_MODELS: Record<string, string[]> = {
   openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"],
   gemini: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
   anthropic: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
@@ -61,6 +62,12 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
   const stateFields = useGraphStore((s) => s.graph?.state ?? []);
   const graphNodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
+  const providers = useSettingsStore((s) => s.providers);
+  const loadProviders = useSettingsStore((s) => s.loadProviders);
+
+  useEffect(() => {
+    loadProviders();
+  }, [loadProviders]);
 
   const [rows, setRows] = useState<InputMapRow[]>(() =>
     toRows(node.config.input_map),
@@ -107,7 +114,18 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     );
   }, [node.id]);
 
-  const models = MODEL_OPTIONS[node.config.provider] ?? [];
+  const models = useMemo(() => {
+    const fetched = providers?.[node.config.provider]?.models;
+    const list =
+      fetched && fetched.length > 0
+        ? fetched
+        : (FALLBACK_MODELS[node.config.provider] ?? []);
+    // Preserve current model if not in list (e.g. custom/fine-tuned model)
+    if (node.config.model && !list.includes(node.config.model)) {
+      return [node.config.model, ...list];
+    }
+    return list;
+  }, [providers, node.config.provider, node.config.model]);
 
   const handleLabelChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
@@ -116,15 +134,17 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     [onChange],
   );
 
-  // Note: handleProviderChange uses static MODEL_OPTIONS for now.
-  // Part 4.4 will replace this with reactive fetched models.
   const handleProviderChange = useCallback(
     (e: ChangeEvent<HTMLSelectElement>) => {
       const provider = e.target.value as LLMNode["config"]["provider"];
-      const providerModels = MODEL_OPTIONS[provider] ?? [];
+      const fetched = providers?.[provider]?.models;
+      const providerModels =
+        fetched && fetched.length > 0
+          ? fetched
+          : (FALLBACK_MODELS[provider] ?? []);
       onChange({ config: { provider, model: providerModels[0] ?? "" } });
     },
-    [onChange],
+    [onChange, providers],
   );
 
   const handleModelChange = useCallback(

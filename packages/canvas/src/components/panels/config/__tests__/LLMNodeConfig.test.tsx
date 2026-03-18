@@ -19,6 +19,15 @@ vi.mock("@store/graphSlice", () => ({
     }),
 }));
 
+// Mock settingsSlice — LLMNodeConfig reads providers
+vi.mock("@store/settingsSlice", () => ({
+  useSettingsStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      providers: null,
+      loadProviders: vi.fn(),
+    }),
+}));
+
 const mockNode: LLMNode = {
   id: "llm-1",
   type: "llm",
