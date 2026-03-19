@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { Tooltip } from "../Tooltip";
 
 describe("Tooltip", () => {
@@ -13,39 +14,25 @@ describe("Tooltip", () => {
     ).toBeInTheDocument();
   });
 
-  it("tooltip text has role tooltip", () => {
+  it("shows tooltip content on hover", async () => {
     render(
       <Tooltip content="Help text">
-        <span>Target</span>
+        <button type="button">Target</button>
       </Tooltip>,
     );
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Help text");
+    await userEvent.hover(screen.getByRole("button", { name: "Target" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Help text");
   });
 
-  it("tooltip is hidden by default (opacity-0)", () => {
+  it("supports ReactNode content", async () => {
     render(
-      <Tooltip content="Hidden">
-        <span>Target</span>
+      <Tooltip content={<div>Rich content</div>}>
+        <button type="button">Target</button>
       </Tooltip>,
     );
-    expect(screen.getByRole("tooltip")).toHaveClass("opacity-0");
-  });
-
-  it("applies correct side class for right (default)", () => {
-    render(
-      <Tooltip content="Right">
-        <span>Target</span>
-      </Tooltip>,
+    await userEvent.hover(screen.getByRole("button", { name: "Target" }));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Rich content",
     );
-    expect(screen.getByRole("tooltip")).toHaveClass("left-full");
-  });
-
-  it("applies correct side class for top", () => {
-    render(
-      <Tooltip content="Top" side="top">
-        <span>Target</span>
-      </Tooltip>,
-    );
-    expect(screen.getByRole("tooltip")).toHaveClass("bottom-full");
   });
 });

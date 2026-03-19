@@ -1,7 +1,7 @@
 import type { StateField } from "@shared/schema";
 import { DEFAULT_FIELD_KEYS } from "@store/graphSlice";
 import { X } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { FieldUsage } from "./StatePanel";
 
 const FIELD_DESCRIPTIONS: Record<string, string> = {
@@ -23,6 +23,45 @@ const REDUCER_LABELS: Record<string, string> = {
   merge: "merge",
 };
 
+/** Build a display name, disambiguating duplicate labels with nodeDetail. */
+function formatWriterNames(
+  writers: FieldUsage["writers"],
+): { nodeId: string; display: string }[] {
+  const labelCounts = new Map<string, number>();
+  for (const w of writers) {
+    labelCounts.set(w.nodeLabel, (labelCounts.get(w.nodeLabel) ?? 0) + 1);
+  }
+  return writers.map((w) => ({
+    nodeId: w.nodeId,
+    display:
+      (labelCounts.get(w.nodeLabel) ?? 0) > 1 && w.nodeDetail
+        ? `${w.nodeLabel} (${w.nodeDetail})`
+        : w.nodeLabel,
+  }));
+}
+
+function formatReaderNames(
+  readers: FieldUsage["readers"],
+): { nodeId: string; display: string }[] {
+  const labelCounts = new Map<string, number>();
+  for (const r of readers) {
+    labelCounts.set(r.nodeLabel, (labelCounts.get(r.nodeLabel) ?? 0) + 1);
+  }
+  return readers.map((r) => {
+    const isDuplicate = (labelCounts.get(r.nodeLabel) ?? 0) > 1;
+    if (isDuplicate && r.nodeDetail) {
+      return {
+        nodeId: r.nodeId,
+        display: `${r.nodeLabel} (${r.nodeDetail}, ${r.paramName})`,
+      };
+    }
+    return {
+      nodeId: r.nodeId,
+      display: `${r.nodeLabel} (${r.paramName})`,
+    };
+  });
+}
+
 export function StateFieldRow({
   field,
   usage,
@@ -32,6 +71,15 @@ export function StateFieldRow({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isReadonly = field.readonly === true;
   const hasUsage = usage.readers.length > 0 || usage.writers.length > 0;
+
+  const writerNames = useMemo(
+    () => formatWriterNames(usage.writers),
+    [usage.writers],
+  );
+  const readerNames = useMemo(
+    () => formatReaderNames(usage.readers),
+    [usage.readers],
+  );
 
   const handleDeleteClick = () => {
     if (hasUsage && !confirmDelete) {
@@ -69,7 +117,7 @@ export function StateFieldRow({
             <button
               type="button"
               onClick={handleDeleteClick}
-              className="flex items-center justify-center rounded p-0.5 text-zinc-500 hover:text-red-400"
+              className="flex cursor-pointer items-center justify-center rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-red-400"
               aria-label={`Delete ${field.key}`}
             >
               <X size={10} />
@@ -78,29 +126,43 @@ export function StateFieldRow({
         </div>
       </div>
 
-      {/* Usage lines */}
+      {/* Usage lines — grouped arrows */}
       {(usage.writers.length > 0 || usage.readers.length > 0) && (
         <div className="mt-1 space-y-0.5">
-          {usage.writers.map((w) => (
-            <button
-              key={`w-${w.nodeId}`}
-              type="button"
-              onClick={() => onNodeClick(w.nodeId)}
-              className="block text-[10px] text-zinc-500 hover:text-zinc-300"
-            >
-              Written by: {w.nodeLabel}
-            </button>
-          ))}
-          {usage.readers.map((r) => (
-            <button
-              key={`r-${r.nodeId}-${r.paramName}`}
-              type="button"
-              onClick={() => onNodeClick(r.nodeId)}
-              className="block text-[10px] text-zinc-500 hover:text-zinc-300"
-            >
-              Used by: {r.nodeLabel} ({r.paramName})
-            </button>
-          ))}
+          {writerNames.length > 0 && (
+            <div className="text-[10px] text-zinc-500">
+              <span className="text-zinc-600">{"\u2190 "}</span>
+              {writerNames.map((w, i) => (
+                <Fragment key={`w-${w.nodeId}`}>
+                  {i > 0 && ", "}
+                  <button
+                    type="button"
+                    onClick={() => onNodeClick(w.nodeId)}
+                    className="cursor-pointer hover:text-zinc-300"
+                  >
+                    {w.display}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+          )}
+          {readerNames.length > 0 && (
+            <div className="text-[10px] text-zinc-500">
+              <span className="text-zinc-600">{"\u2192 "}</span>
+              {readerNames.map((r, i) => (
+                <Fragment key={`r-${r.nodeId}-${r.display}`}>
+                  {i > 0 && ", "}
+                  <button
+                    type="button"
+                    onClick={() => onNodeClick(r.nodeId)}
+                    className="cursor-pointer hover:text-zinc-300"
+                  >
+                    {r.display}
+                  </button>
+                </Fragment>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

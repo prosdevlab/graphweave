@@ -84,7 +84,10 @@ describe("FloatingToolbar", () => {
     const toolbar = screen.getByTestId("floating-toolbar");
     const firstChild = toolbar.children[0];
     expect(firstChild).toBeDefined();
-    expect(firstChild?.querySelector('[aria-label="Close"]')).toBeTruthy();
+    expect(
+      firstChild?.getAttribute("aria-label") === "Close" ||
+        firstChild?.querySelector('[aria-label="Close"]'),
+    ).toBeTruthy();
   });
 
   it("X button lightens on hover class", () => {

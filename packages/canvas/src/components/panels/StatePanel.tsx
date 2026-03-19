@@ -8,32 +8,45 @@ import { AddFieldForm } from "./AddFieldForm";
 import { StateFieldRow } from "./StateFieldRow";
 
 export interface FieldUsage {
-  readers: { nodeId: string; nodeLabel: string; paramName: string }[];
-  writers: { nodeId: string; nodeLabel: string }[];
+  readers: {
+    nodeId: string;
+    nodeLabel: string;
+    nodeDetail: string;
+    paramName: string;
+  }[];
+  writers: { nodeId: string; nodeLabel: string; nodeDetail: string }[];
 }
 
 function computeFieldUsage(fieldKey: string, nodes: NodeSchema[]): FieldUsage {
   const readers: FieldUsage["readers"] = [];
   const writers: FieldUsage["writers"] = [];
+  const seenWriterIds = new Set<string>();
+
   for (const node of nodes) {
     if (node.type !== "llm" && node.type !== "tool") continue;
-    if (node.config.output_key === fieldKey) {
-      writers.push({ nodeId: node.id, nodeLabel: node.label });
+
+    const nodeDetail =
+      node.type === "llm" ? node.config.model : node.config.tool_name;
+
+    const isWriter =
+      node.config.output_key === fieldKey ||
+      // LLM dual-write: execution layer appends to messages even when
+      // output_key is a dedicated field (e.g. "llm_response").
+      (node.type === "llm" &&
+        fieldKey === "messages" &&
+        node.config.output_key !== "messages");
+
+    if (isWriter && !seenWriterIds.has(node.id)) {
+      seenWriterIds.add(node.id);
+      writers.push({ nodeId: node.id, nodeLabel: node.label, nodeDetail });
     }
-    // LLM dual-write: execution layer appends to messages even when
-    // output_key is a dedicated field (e.g. "llm_response").
-    if (
-      node.type === "llm" &&
-      fieldKey === "messages" &&
-      node.config.output_key !== "messages"
-    ) {
-      writers.push({ nodeId: node.id, nodeLabel: node.label });
-    }
+
     for (const [param, expr] of Object.entries(node.config.input_map)) {
       if (expr && extractRootKey(expr) === fieldKey) {
         readers.push({
           nodeId: node.id,
           nodeLabel: node.label,
+          nodeDetail,
           paramName: param,
         });
       }
