@@ -2,7 +2,13 @@ import type { LLMNode } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { useSettingsStore } from "@store/settingsSlice";
 import { Input } from "@ui/Input";
-import { Select } from "@ui/Select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ui/Select";
 import { Textarea } from "@ui/Textarea";
 import {
   AlertTriangle,
@@ -140,8 +146,8 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
   );
 
   const handleProviderChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      const provider = e.target.value as LLMNode["config"]["provider"];
+    (value: string) => {
+      const provider = value as LLMNode["config"]["provider"];
       const fetched = providers?.[provider]?.models;
       const providerModels =
         fetched && fetched.length > 0
@@ -153,8 +159,8 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
   );
 
   const handleModelChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      onChange({ config: { model: e.target.value } });
+    (value: string) => {
+      onChange({ config: { model: value } });
     },
     [onChange],
   );
@@ -286,15 +292,19 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
                 Provider
               </label>
               <Select
-                id="node-provider"
                 value={node.config.provider}
-                onChange={handleProviderChange}
+                onValueChange={handleProviderChange}
               >
-                {PROVIDERS.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
+                <SelectTrigger id="node-provider">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDERS.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
@@ -306,15 +316,19 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
                 Model
               </label>
               <Select
-                id="node-model"
                 value={node.config.model}
-                onChange={handleModelChange}
+                onValueChange={handleModelChange}
               >
-                {models.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
+                <SelectTrigger id="node-model">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {models.map((m) => (
+                    <SelectItem key={m} value={m}>
+                      {m}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </div>
 
@@ -500,17 +514,22 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
                     </button>
                   </div>
                   <Select
-                    value={selectValue}
-                    onChange={(e) => handleSelectChange(i, e.target.value)}
-                    aria-label="Source state field"
+                    value={selectValue || undefined}
+                    onValueChange={(v) => handleSelectChange(i, v)}
                   >
-                    <option value="">Select source…</option>
-                    {filteredPresets.map((p) => (
-                      <option key={p.value} value={p.value}>
-                        {p.label}
-                      </option>
-                    ))}
-                    <option value="__custom__">Custom expression…</option>
+                    <SelectTrigger aria-label="Source state field">
+                      <SelectValue placeholder="Select source…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredPresets.map((p) => (
+                        <SelectItem key={p.value} value={p.value}>
+                          {p.label}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">
+                        Custom expression…
+                      </SelectItem>
+                    </SelectContent>
                   </Select>
                   {row.customMode && (
                     <Input

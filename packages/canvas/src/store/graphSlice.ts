@@ -20,6 +20,8 @@ const DEFAULT_STATE: StateField[] = [
   { key: "llm_response", type: "string", reducer: "replace" },
 ];
 
+export const DEFAULT_FIELD_KEYS = new Set(DEFAULT_STATE.map((f) => f.key));
+
 /** Pre-places Start + End connected by an edge so the user isn't staring at a blank canvas. */
 function createStarterNodes(): {
   nodes: NodeSchema[];

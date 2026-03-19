@@ -6,7 +6,13 @@ import type {
 import type { EdgeSchema } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Input } from "@ui/Input";
-import { Select } from "@ui/Select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ui/Select";
 import { Textarea } from "@ui/Textarea";
 import { type ChangeEvent, memo, useCallback, useMemo } from "react";
 import { ConditionBranchEditor } from "./ConditionBranchEditor";
@@ -81,11 +87,10 @@ function ConditionNodeConfigComponent({
   );
 
   const handleTypeChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      const newType = e.target.value;
+    (value: string) => {
       onChange({
         config: {
-          condition: CONDITION_CONFIG_DEFAULTS[newType] as ConditionConfig,
+          condition: CONDITION_CONFIG_DEFAULTS[value] as ConditionConfig,
           // preserve branches and default_branch — edge-derived
         },
       });
@@ -108,8 +113,8 @@ function ConditionNodeConfigComponent({
   );
 
   const handleDefaultBranchChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      onChange({ config: { default_branch: e.target.value } });
+    (value: string) => {
+      onChange({ config: { default_branch: value } });
     },
     [onChange],
   );
@@ -140,16 +145,17 @@ function ConditionNodeConfigComponent({
         >
           Condition Type
         </label>
-        <Select
-          id="node-condition-type"
-          value={conditionType}
-          onChange={handleTypeChange}
-        >
-          {CONDITION_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t.replace(/_/g, " ")}
-            </option>
-          ))}
+        <Select value={conditionType} onValueChange={handleTypeChange}>
+          <SelectTrigger id="node-condition-type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CONDITION_TYPES.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t.replace(/_/g, " ")}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
 
@@ -384,16 +390,19 @@ function ConditionNodeConfigComponent({
             Default Branch (when condition fails)
           </label>
           <Select
-            id="cond-default-branch"
-            value={node.config.default_branch}
-            onChange={handleDefaultBranchChange}
+            value={node.config.default_branch || undefined}
+            onValueChange={handleDefaultBranchChange}
           >
-            <option value="">Select branch…</option>
-            {branchOptions.map((b) => (
-              <option key={b} value={b}>
-                {b}
-              </option>
-            ))}
+            <SelectTrigger id="cond-default-branch">
+              <SelectValue placeholder="Select branch…" />
+            </SelectTrigger>
+            <SelectContent>
+              {branchOptions.map((b) => (
+                <SelectItem key={b} value={b}>
+                  {b}
+                </SelectItem>
+              ))}
+            </SelectContent>
           </Select>
         </div>
       )}

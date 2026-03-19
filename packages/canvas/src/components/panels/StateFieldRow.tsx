@@ -1,7 +1,14 @@
 import type { StateField } from "@shared/schema";
+import { DEFAULT_FIELD_KEYS } from "@store/graphSlice";
 import { X } from "lucide-react";
 import { useState } from "react";
 import type { FieldUsage } from "./StatePanel";
+
+const FIELD_DESCRIPTIONS: Record<string, string> = {
+  messages: "Conversation history \u2014 LLM nodes read and write here",
+  user_input: "Provided by the user when running the graph",
+  llm_response: "Latest LLM output text",
+};
 
 interface StateFieldRowProps {
   field: StateField;
@@ -38,7 +45,15 @@ export function StateFieldRow({
   return (
     <div className="rounded border border-zinc-800 p-2">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-zinc-200">{field.key}</span>
+        <div>
+          <span className="text-xs font-medium text-zinc-200">{field.key}</span>
+          {DEFAULT_FIELD_KEYS.has(field.key) &&
+            FIELD_DESCRIPTIONS[field.key] && (
+              <p className="text-[9px] text-zinc-500">
+                {FIELD_DESCRIPTIONS[field.key]}
+              </p>
+            )}
+        </div>
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-zinc-600">{field.type}</span>
           <span className="text-[10px] text-zinc-700">/</span>
