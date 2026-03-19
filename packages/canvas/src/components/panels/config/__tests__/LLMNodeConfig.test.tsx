@@ -1,5 +1,5 @@
 import type { LLMNode } from "@shared/schema";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LLMNodeConfig } from "../LLMNodeConfig";
 
@@ -54,19 +54,28 @@ describe("LLMNodeConfig", () => {
   it("model settings section is collapsible", async () => {
     render(<LLMNodeConfig node={mockNode} onChange={vi.fn()} />);
     // Model settings should start collapsed (provider + model are set)
-    expect(screen.queryByDisplayValue("openai")).not.toBeInTheDocument();
+    expect(screen.queryByText("openai")).not.toBeInTheDocument();
     // Click to expand
     await userEvent.click(screen.getByText("Model Settings"));
-    expect(screen.getByDisplayValue("openai")).toBeInTheDocument();
-    expect(screen.getByDisplayValue("gpt-4o")).toBeInTheDocument();
+    expect(screen.getByText("openai")).toBeInTheDocument();
+    expect(screen.getByText("gpt-4o")).toBeInTheDocument();
   });
 
   it("changing provider updates model options", async () => {
     const onChange = vi.fn();
     render(<LLMNodeConfig node={mockNode} onChange={onChange} />);
     await userEvent.click(screen.getByText("Model Settings"));
-    const providerSelect = screen.getByDisplayValue("openai");
-    await userEvent.selectOptions(providerSelect, "anthropic");
+    // Click provider trigger to open dropdown
+    const triggers = screen.getAllByRole("combobox");
+    expect(triggers.length).toBeGreaterThan(0);
+    fireEvent.pointerDown(triggers[0] as HTMLElement, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    // Click the "anthropic" option in the listbox
+    const anthropicOption = screen.getByRole("option", { name: "anthropic" });
+    fireEvent.click(anthropicOption);
     expect(onChange).toHaveBeenCalledWith({
       config: { provider: "anthropic", model: "claude-sonnet-4-20250514" },
     });

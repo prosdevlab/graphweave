@@ -2,7 +2,13 @@ import type { ToolNode } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { useSettingsStore } from "@store/settingsSlice";
 import { Input } from "@ui/Input";
-import { Select } from "@ui/Select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ui/Select";
 import {
   AlertTriangle,
   Check,
@@ -115,9 +121,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
   );
 
   const handleToolChange = useCallback(
-    (e: ChangeEvent<HTMLSelectElement>) => {
-      const toolName = e.target.value;
-
+    (toolName: string) => {
       // Cleanup orphaned auto-created fields from the previous tool
       if (autoCreatedKeys.length > 0) {
         const otherNodes = graphNodes.filter((n) => n.id !== node.id);
@@ -255,19 +259,22 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
           <p className="mb-1 text-xs text-red-400">{toolsError}</p>
         )}
         <Select
-          id="node-tool"
-          value={node.config.tool_name}
-          onChange={handleToolChange}
+          value={node.config.tool_name || undefined}
+          onValueChange={handleToolChange}
           disabled={!toolsLoaded && !toolsError}
         >
-          <option value="">
-            {toolsLoaded ? "Select a tool…" : "Loading tools…"}
-          </option>
-          {tools.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name}
-            </option>
-          ))}
+          <SelectTrigger id="node-tool">
+            <SelectValue
+              placeholder={toolsLoaded ? "Select a tool…" : "Loading tools…"}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {tools.map((t) => (
+              <SelectItem key={t.name} value={t.name}>
+                {t.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
 
@@ -430,28 +437,33 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                       </p>
                     )}
                     <Select
-                      value={selectValue}
-                      onChange={(e) => handleSelectChange(i, e.target.value)}
-                      aria-label="Source state field"
+                      value={selectValue || undefined}
+                      onValueChange={(v) => handleSelectChange(i, v)}
                     >
-                      <option value="">Select source…</option>
-                      {hasDefault && (
-                        <option
-                          value={
-                            paramInfo?.default != null
-                              ? "__default__"
-                              : `"${defaultDisplay}"`
-                          }
-                        >
-                          — Use default ({defaultDisplay}) —
-                        </option>
-                      )}
-                      {filteredPresets.map((p) => (
-                        <option key={p.value} value={p.value}>
-                          {p.label}
-                        </option>
-                      ))}
-                      <option value="__custom__">Custom expression…</option>
+                      <SelectTrigger aria-label="Source state field">
+                        <SelectValue placeholder="Select source…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {hasDefault && (
+                          <SelectItem
+                            value={
+                              paramInfo?.default != null
+                                ? "__default__"
+                                : `"${defaultDisplay}"`
+                            }
+                          >
+                            — Use default ({defaultDisplay}) —
+                          </SelectItem>
+                        )}
+                        {filteredPresets.map((p) => (
+                          <SelectItem key={p.value} value={p.value}>
+                            {p.label}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__custom__">
+                          Custom expression…
+                        </SelectItem>
+                      </SelectContent>
                     </Select>
                     {row.customMode && (
                       <Input

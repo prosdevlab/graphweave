@@ -1,7 +1,13 @@
 import type { StateField } from "@shared/schema";
 import { Button } from "@ui/Button";
 import { Input } from "@ui/Input";
-import { Select } from "@ui/Select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ui/Select";
 import { Plus } from "lucide-react";
 import { type FormEvent, useCallback, useState } from "react";
 
@@ -73,27 +79,33 @@ export function AddFieldForm({ existingKeys, onAdd }: AddFieldFormProps) {
       <div className="flex gap-1.5">
         <Select
           value={type}
-          onChange={(e) => setType(e.target.value as StateField["type"])}
-          className="flex-1"
-          aria-label="Field type"
+          onValueChange={(v) => setType(v as StateField["type"])}
         >
-          {TYPE_OPTIONS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
+          <SelectTrigger className="flex-1" aria-label="Field type">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {TYPE_OPTIONS.map((t) => (
+              <SelectItem key={t} value={t}>
+                {t}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
         <Select
           value={reducer}
-          onChange={(e) => setReducer(e.target.value as StateField["reducer"])}
-          className="flex-1"
-          aria-label="When updated"
+          onValueChange={(v) => setReducer(v as StateField["reducer"])}
         >
-          {REDUCER_OPTIONS.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
+          <SelectTrigger className="flex-1" aria-label="When updated">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {REDUCER_OPTIONS.map((r) => (
+              <SelectItem key={r.value} value={r.value}>
+                {r.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
         </Select>
       </div>
       {error && <p className="text-[10px] text-red-400">{error}</p>}

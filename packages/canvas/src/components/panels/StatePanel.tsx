@@ -114,7 +114,14 @@ export function StatePanel() {
         side="left"
       >
         <p className="mb-3 text-[10px] text-zinc-500">
-          State fields carry data between nodes in your graph.
+          State fields carry data between nodes. Each field is available as an
+          input source when configuring Tool and LLM nodes.
+          {stateFields.length > 0 && (
+            <>
+              <br />
+              Click a node name to jump to its config.
+            </>
+          )}
         </p>
 
         {stateFields.length === 0 ? (
@@ -136,6 +143,11 @@ export function StatePanel() {
         )}
 
         <div className="mt-4 border-t border-zinc-800 pt-3">
+          <p className="mb-1 text-xs font-medium text-zinc-300">Add a field</p>
+          <p className="mb-2 text-[10px] text-zinc-500">
+            Default fields and tool parameters are added automatically. Add a
+            custom field here for data not tied to a specific tool.
+          </p>
           <AddFieldForm existingKeys={existingKeys} onAdd={handleAdd} />
         </div>
       </Sheet>
