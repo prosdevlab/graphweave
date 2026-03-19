@@ -2,7 +2,7 @@ import { useCanvasContext } from "@contexts/CanvasContext";
 import type { NodeSchema, StateField } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Sheet } from "@ui/Sheet";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractRootKey } from "../canvas/runInputUtils";
 import { AddFieldForm } from "./AddFieldForm";
 import { StateFieldRow } from "./StateFieldRow";
@@ -66,6 +66,13 @@ export function StatePanel() {
     () => new Set(stateFields.map((f) => f.key)),
     [stateFields],
   );
+
+  // Clear undo timer on unmount to avoid setting state on unmounted component
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
 
   const handleDelete = useCallback(
     (field: StateField) => {

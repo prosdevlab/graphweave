@@ -29,8 +29,7 @@ _OPENAI_NON_CHAT_PREFIXES = (
 
 async def list_openai_models() -> list[str]:
     """List available OpenAI chat models."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    if not os.getenv("OPENAI_API_KEY"):
         return []
     try:
         from openai import AsyncOpenAI
@@ -43,19 +42,18 @@ async def list_openai_models() -> list[str]:
             if not m.id.startswith(_OPENAI_NON_CHAT_PREFIXES) and "realtime" not in m.id
         )
     except Exception:
-        logger.exception("Failed to list OpenAI models")
+        logger.error("Failed to list OpenAI models", exc_info=True)
         return []
 
 
 async def list_gemini_models() -> list[str]:
     """List available Gemini models that support generateContent."""
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
+    if not os.getenv("GEMINI_API_KEY"):
         return []
     try:
         import google.generativeai as genai
 
-        genai.configure(api_key=api_key)
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
         # genai.list_models() is synchronous — wrap to avoid blocking event loop
         raw_models = await asyncio.to_thread(genai.list_models)
         models = []
@@ -66,7 +64,7 @@ async def list_gemini_models() -> list[str]:
                     models.append(name)
         return sorted(models)
     except Exception:
-        logger.exception("Failed to list Gemini models")
+        logger.error("Failed to list Gemini models", exc_info=True)
         return []
 
 

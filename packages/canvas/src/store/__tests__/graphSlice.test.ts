@@ -155,4 +155,27 @@ describe("graphSlice", () => {
     expect(graph?.name).toBe("New Name");
     expect(dirty).toBe(true);
   });
+
+  it("removeStateFields ignores readonly fields", () => {
+    useGraphStore.getState().newGraph("G");
+    const before = useGraphStore.getState().graph?.state ?? [];
+    // messages is readonly, user_input is not
+    useGraphStore.getState().removeStateFields(["messages", "user_input"]);
+    const after = useGraphStore.getState().graph?.state ?? [];
+    expect(after.find((f) => f.key === "messages")).toBeDefined();
+    expect(after.find((f) => f.key === "user_input")).toBeUndefined();
+    expect(after).toHaveLength(before.length - 1);
+  });
+
+  it("addStateFields deduplicates against existing keys", () => {
+    useGraphStore.getState().newGraph("G");
+    const before = useGraphStore.getState().graph?.state ?? [];
+    useGraphStore
+      .getState()
+      .addStateFields([
+        { key: "messages", type: "string", reducer: "replace" },
+      ]);
+    const after = useGraphStore.getState().graph?.state ?? [];
+    expect(after).toHaveLength(before.length);
+  });
 });
