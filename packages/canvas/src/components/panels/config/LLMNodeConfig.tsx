@@ -1,6 +1,7 @@
 import type { LLMNode } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { useSettingsStore } from "@store/settingsSlice";
+import { Button } from "@ui/Button";
 import { Input } from "@ui/Input";
 import {
   Select,
@@ -32,6 +33,7 @@ import {
 } from "../../../utils/graphTraversal";
 import {
   type InputMapRow,
+  type Preset,
   buildPresetsForParam,
   getExpressionYieldType,
   getMappingWarning,
@@ -102,6 +104,16 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     () => buildPresetsForParam(relevantFields),
     [relevantFields],
   );
+
+  const suggestionPresets = useMemo(
+    () => buildPresetsForParam(relevantFields, "string"),
+    [relevantFields],
+  );
+
+  const suggestions = useMemo(() => {
+    if (rows.length > 0) return [];
+    return suggestionPresets.filter((p) => p.value !== "messages[-1].content");
+  }, [rows.length, suggestionPresets]);
 
   const allMapped = rows.length > 0 && rows.every((r) => r.stateKey !== "");
 
@@ -203,6 +215,22 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     setRows(updated);
     setExpanded(true);
   }, [rows]);
+
+  const handleSuggestionClick = useCallback(
+    (preset: Preset) => {
+      const newRow: InputMapRow = {
+        param: preset.value,
+        stateKey: preset.value,
+        isAutoFilled: false,
+        customMode: false,
+      };
+      const updated = [...rows, newRow];
+      setRows(updated);
+      onChange({ config: { input_map: toRecord(updated) } });
+      setExpanded(true);
+    },
+    [rows, onChange],
+  );
 
   const handleSelectChange = useCallback(
     (index: number, value: string) => {
@@ -397,10 +425,32 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
 
         {rows.length === 0 ? (
           <div className="space-y-1.5">
-            <p className="text-[10px] text-zinc-500">
-              No mappings configured. Uses conversation history (messages). To
-              pass specific data from other nodes, add a mapping.
-            </p>
+            {suggestions.length > 0 ? (
+              <>
+                <p className="text-[10px] text-zinc-500">
+                  Uses conversation history (messages). These fields are also
+                  available:
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {suggestions.map((preset) => (
+                    <Button
+                      key={preset.value}
+                      variant="chip"
+                      onClick={() => handleSuggestionClick(preset)}
+                      className="gap-1"
+                    >
+                      <Plus size={10} />
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="text-[10px] text-zinc-500">
+                No mappings configured. Uses conversation history (messages). To
+                pass specific data from other nodes, add a mapping.
+              </p>
+            )}
             <button
               type="button"
               onClick={handleAddRow}

@@ -56,8 +56,13 @@ export function buildPresetsForParam(
       if (!paramType || paramType === "string") {
         presets.push({ label: field.key, value: field.key });
       }
+    } else if (field.type === "object") {
+      // Tool outputs are registered as "object" — allow for string params too
+      if (!paramType || paramType === "string" || paramType === "object") {
+        presets.push({ label: field.key, value: field.key });
+      }
     } else {
-      // boolean, object — shown for undefined or exact type match
+      // boolean — shown for undefined or exact type match
       if (!paramType || paramType === field.type) {
         presets.push({ label: field.key, value: field.key });
       }
