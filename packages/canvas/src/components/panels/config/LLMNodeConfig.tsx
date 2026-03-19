@@ -174,14 +174,16 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
 
   const handleTemperatureChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
-      onChange({ config: { temperature: Number.parseFloat(e.target.value) } });
+      const parsed = Number.parseFloat(e.target.value);
+      if (!Number.isNaN(parsed)) onChange({ config: { temperature: parsed } });
     },
     [onChange],
   );
 
   const handleMaxTokensChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
-      onChange({ config: { max_tokens: Number.parseInt(e.target.value, 10) } });
+      const parsed = Number.parseInt(e.target.value, 10);
+      if (!Number.isNaN(parsed)) onChange({ config: { max_tokens: parsed } });
     },
     [onChange],
   );
