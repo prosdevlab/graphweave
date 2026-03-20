@@ -40,6 +40,7 @@ import {
   getExpressionYieldType,
   getMappingWarning,
   isEnumLike,
+  resolveSourceHint,
   resolveSourceLabel,
   toRecord,
 } from "./presetUtils";
@@ -346,8 +347,8 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                     row.stateKey,
                     stateFields,
                     defaultDisplay,
-                    sourceLabels,
                   ) + (isAutoCreated ? " (auto)" : "");
+                const hint = resolveSourceHint(row.stateKey, sourceLabels);
                 return (
                   <button
                     key={row.param}
@@ -361,7 +362,12 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                     />
                     <span className="text-zinc-300">{row.param}</span>
                     <span className="text-zinc-600">←</span>
-                    <span className="text-zinc-500">{label}</span>
+                    <span className="text-zinc-500">
+                      {label}
+                      {hint && (
+                        <span className="ml-1 text-zinc-600">{hint}</span>
+                      )}
+                    </span>
                   </button>
                 );
               })}
@@ -505,7 +511,11 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                           </SelectItem>
                         )}
                         {filteredPresets.map((p) => (
-                          <SelectItem key={p.value} value={p.value}>
+                          <SelectItem
+                            key={p.value}
+                            value={p.value}
+                            description={p.sourceHint}
+                          >
                             {p.label}
                           </SelectItem>
                         ))}

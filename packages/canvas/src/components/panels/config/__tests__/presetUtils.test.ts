@@ -4,6 +4,7 @@ import {
   autoMapParams,
   buildPresetsForParam,
   isEnumLike,
+  resolveSourceHint,
   resolveSourceLabel,
   toRecord,
 } from "../presetUtils";
@@ -96,50 +97,53 @@ describe("buildPresetsForParam", () => {
     expect(p?.label).toBe("query");
   });
 
-  it("includes source node name when sourceLabels provided", () => {
+  it("sets sourceHint when sourceLabels provided", () => {
     const sourceLabels = new Map([["tool_result", ["Search"]]]);
     const toolField = { key: "tool_result", type: "object" };
     const presets = buildPresetsForParam([toolField], undefined, sourceLabels);
     const p = presets.find((x) => x.value === "tool_result");
-    expect(p?.label).toBe("tool_result (Search)");
+    expect(p?.label).toBe("tool_result");
+    expect(p?.sourceHint).toBe("from Search");
   });
 
-  it("includes source label on list-type field entry", () => {
+  it("sets sourceHint on list-type field entry", () => {
     const sourceLabels = new Map([["results", ["Search"]]]);
     const listField = { key: "results", type: "list" };
     const presets = buildPresetsForParam([listField], "string", sourceLabels);
     const p = presets.find((x) => x.value === "results[-1].content");
-    expect(p?.label).toBe("Latest results entry (Search)");
+    expect(p?.label).toBe("Latest results entry");
+    expect(p?.sourceHint).toBe("from Search");
   });
 
-  it("shows colliding source labels joined by comma", () => {
+  it("joins colliding source labels in sourceHint", () => {
     const sourceLabels = new Map([["tool_result", ["Search", "Weather"]]]);
     const toolField = { key: "tool_result", type: "object" };
     const presets = buildPresetsForParam([toolField], undefined, sourceLabels);
     const p = presets.find((x) => x.value === "tool_result");
-    expect(p?.label).toBe("tool_result (Search, Weather)");
+    expect(p?.sourceHint).toBe("from Search, Weather");
   });
 
-  it("preset value is unchanged when sourceLabels present", () => {
+  it("preset value and label unchanged when sourceLabels present", () => {
     const sourceLabels = new Map([["tool_result", ["Search"]]]);
     const toolField = { key: "tool_result", type: "object" };
     const presets = buildPresetsForParam([toolField], undefined, sourceLabels);
-    const p = presets.find((x) => x.label?.includes("Search"));
-    expect(p?.value).toBe("tool_result");
-  });
-
-  it("no change when sourceLabels absent", () => {
-    const toolField = { key: "tool_result", type: "object" };
-    const presets = buildPresetsForParam([toolField]);
     const p = presets.find((x) => x.value === "tool_result");
+    expect(p?.value).toBe("tool_result");
     expect(p?.label).toBe("tool_result");
   });
 
-  it("no change when key not in sourceLabels map", () => {
+  it("no sourceHint when sourceLabels absent", () => {
+    const toolField = { key: "tool_result", type: "object" };
+    const presets = buildPresetsForParam([toolField]);
+    const p = presets.find((x) => x.value === "tool_result");
+    expect(p?.sourceHint).toBeUndefined();
+  });
+
+  it("no sourceHint when key not in sourceLabels map", () => {
     const sourceLabels = new Map([["other_key", ["Node"]]]);
     const presets = buildPresetsForParam([queryField], undefined, sourceLabels);
     const p = presets.find((x) => x.value === "query");
-    expect(p?.label).toBe("query");
+    expect(p?.sourceHint).toBeUndefined();
   });
 });
 
@@ -216,44 +220,60 @@ describe("resolveSourceLabel", () => {
     expect(label.length).toBeLessThanOrEqual(30);
     expect(label).toContain("...");
   });
+});
 
-  it("appends source label for known field when sourceLabels provided", () => {
+// -- resolveSourceHint ----------------------------------------------------
+
+describe("resolveSourceHint", () => {
+  it("returns hint for direct key match", () => {
     const sourceLabels = new Map([["query", ["Search"]]]);
-    expect(resolveSourceLabel("query", [queryField], null, sourceLabels)).toBe(
-      "query (Search)",
-    );
+    expect(resolveSourceHint("query", sourceLabels)).toBe("from Search");
   });
 
-  it("appends source label for [-1].content expression", () => {
+  it("returns hint for [-1].content expression", () => {
     const sourceLabels = new Map([["results", ["Fetcher"]]]);
-    expect(
-      resolveSourceLabel("results[-1].content", [], null, sourceLabels),
-    ).toBe("latest results entry (Fetcher)");
-  });
-
-  it("does NOT append source for user_input", () => {
-    const sourceLabels = new Map([["user_input", ["Start"]]]);
-    expect(resolveSourceLabel("user_input", [], null, sourceLabels)).toBe(
-      "user input",
+    expect(resolveSourceHint("results[-1].content", sourceLabels)).toBe(
+      "from Fetcher",
     );
   });
 
-  it("does NOT append source for messages[-1].content", () => {
+  it("joins multiple source labels", () => {
+    const sourceLabels = new Map([["data", ["Search", "Weather"]]]);
+    expect(resolveSourceHint("data", sourceLabels)).toBe(
+      "from Search, Weather",
+    );
+  });
+
+  it("returns undefined for user_input", () => {
+    const sourceLabels = new Map([["user_input", ["Start"]]]);
+    expect(resolveSourceHint("user_input", sourceLabels)).toBeUndefined();
+  });
+
+  it("returns undefined for messages[-1].content", () => {
     const sourceLabels = new Map([["messages", ["Node"]]]);
     expect(
-      resolveSourceLabel("messages[-1].content", [], null, sourceLabels),
-    ).toBe("your message");
+      resolveSourceHint("messages[-1].content", sourceLabels),
+    ).toBeUndefined();
   });
 
-  it("no change when sourceLabels absent", () => {
-    expect(resolveSourceLabel("query", [queryField])).toBe("query");
+  it("returns undefined for __default__", () => {
+    const sourceLabels = new Map([["__default__", ["Node"]]]);
+    expect(resolveSourceHint("__default__", sourceLabels)).toBeUndefined();
   });
 
-  it("no change when key not in sourceLabels", () => {
+  it("returns undefined for quoted literal", () => {
+    const sourceLabels = new Map([["now", ["Node"]]]);
+    expect(resolveSourceHint('"now"', sourceLabels)).toBeUndefined();
+  });
+
+  it("returns undefined when key not in map", () => {
     const sourceLabels = new Map([["other", ["Node"]]]);
-    expect(resolveSourceLabel("query", [queryField], null, sourceLabels)).toBe(
-      "query",
-    );
+    expect(resolveSourceHint("query", sourceLabels)).toBeUndefined();
+  });
+
+  it("returns undefined for empty stateKey", () => {
+    const sourceLabels = new Map([["", ["Node"]]]);
+    expect(resolveSourceHint("", sourceLabels)).toBeUndefined();
   });
 });
 
