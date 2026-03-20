@@ -95,6 +95,52 @@ describe("buildPresetsForParam", () => {
     const p = presets.find((x) => x.value === "query");
     expect(p?.label).toBe("query");
   });
+
+  it("includes source node name when sourceLabels provided", () => {
+    const sourceLabels = new Map([["tool_result", ["Search"]]]);
+    const toolField = { key: "tool_result", type: "object" };
+    const presets = buildPresetsForParam([toolField], undefined, sourceLabels);
+    const p = presets.find((x) => x.value === "tool_result");
+    expect(p?.label).toBe("tool_result (Search)");
+  });
+
+  it("includes source label on list-type field entry", () => {
+    const sourceLabels = new Map([["results", ["Search"]]]);
+    const listField = { key: "results", type: "list" };
+    const presets = buildPresetsForParam([listField], "string", sourceLabels);
+    const p = presets.find((x) => x.value === "results[-1].content");
+    expect(p?.label).toBe("Latest results entry (Search)");
+  });
+
+  it("shows colliding source labels joined by comma", () => {
+    const sourceLabels = new Map([["tool_result", ["Search", "Weather"]]]);
+    const toolField = { key: "tool_result", type: "object" };
+    const presets = buildPresetsForParam([toolField], undefined, sourceLabels);
+    const p = presets.find((x) => x.value === "tool_result");
+    expect(p?.label).toBe("tool_result (Search, Weather)");
+  });
+
+  it("preset value is unchanged when sourceLabels present", () => {
+    const sourceLabels = new Map([["tool_result", ["Search"]]]);
+    const toolField = { key: "tool_result", type: "object" };
+    const presets = buildPresetsForParam([toolField], undefined, sourceLabels);
+    const p = presets.find((x) => x.label?.includes("Search"));
+    expect(p?.value).toBe("tool_result");
+  });
+
+  it("no change when sourceLabels absent", () => {
+    const toolField = { key: "tool_result", type: "object" };
+    const presets = buildPresetsForParam([toolField]);
+    const p = presets.find((x) => x.value === "tool_result");
+    expect(p?.label).toBe("tool_result");
+  });
+
+  it("no change when key not in sourceLabels map", () => {
+    const sourceLabels = new Map([["other_key", ["Node"]]]);
+    const presets = buildPresetsForParam([queryField], undefined, sourceLabels);
+    const p = presets.find((x) => x.value === "query");
+    expect(p?.label).toBe("query");
+  });
 });
 
 // -- isEnumLike -----------------------------------------------------------
@@ -169,6 +215,45 @@ describe("resolveSourceLabel", () => {
     const label = resolveSourceLabel(longExpr, []);
     expect(label.length).toBeLessThanOrEqual(30);
     expect(label).toContain("...");
+  });
+
+  it("appends source label for known field when sourceLabels provided", () => {
+    const sourceLabels = new Map([["query", ["Search"]]]);
+    expect(resolveSourceLabel("query", [queryField], null, sourceLabels)).toBe(
+      "query (Search)",
+    );
+  });
+
+  it("appends source label for [-1].content expression", () => {
+    const sourceLabels = new Map([["results", ["Fetcher"]]]);
+    expect(
+      resolveSourceLabel("results[-1].content", [], null, sourceLabels),
+    ).toBe("latest results entry (Fetcher)");
+  });
+
+  it("does NOT append source for user_input", () => {
+    const sourceLabels = new Map([["user_input", ["Start"]]]);
+    expect(resolveSourceLabel("user_input", [], null, sourceLabels)).toBe(
+      "user input",
+    );
+  });
+
+  it("does NOT append source for messages[-1].content", () => {
+    const sourceLabels = new Map([["messages", ["Node"]]]);
+    expect(
+      resolveSourceLabel("messages[-1].content", [], null, sourceLabels),
+    ).toBe("your message");
+  });
+
+  it("no change when sourceLabels absent", () => {
+    expect(resolveSourceLabel("query", [queryField])).toBe("query");
+  });
+
+  it("no change when key not in sourceLabels", () => {
+    const sourceLabels = new Map([["other", ["Node"]]]);
+    expect(resolveSourceLabel("query", [queryField], null, sourceLabels)).toBe(
+      "query",
+    );
   });
 });
 

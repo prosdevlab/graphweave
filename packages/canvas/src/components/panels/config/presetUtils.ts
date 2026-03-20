@@ -29,16 +29,28 @@ export interface InputMapRow {
 export function buildPresetsForParam(
   stateFields: { key: string; type: string }[],
   paramType?: string,
+  sourceLabels?: Map<string, string[]>,
 ): Preset[] {
   const presets: Preset[] = [];
+
+  function labelWithSource(base: string, key: string): string {
+    if (sourceLabels?.has(key)) {
+      return `${base} (${sourceLabels.get(key)?.join(", ")})`;
+    }
+    return base;
+  }
+
   for (const field of stateFields) {
     if (field.type === "list") {
       if (!paramType || paramType === "string") {
-        const label =
+        const baseLabel =
           field.key === "messages"
             ? "User's message"
             : `Latest ${field.key} entry`;
-        presets.push({ label, value: `${field.key}[-1].content` });
+        presets.push({
+          label: labelWithSource(baseLabel, field.key),
+          value: `${field.key}[-1].content`,
+        });
       }
       // Raw list reference only for custom rows (no paramType)
       if (!paramType) {
@@ -50,21 +62,33 @@ export function buildPresetsForParam(
       }
     } else if (field.type === "number") {
       if (!paramType || paramType === "number") {
-        presets.push({ label: field.key, value: field.key });
+        presets.push({
+          label: labelWithSource(field.key, field.key),
+          value: field.key,
+        });
       }
     } else if (field.type === "string") {
       if (!paramType || paramType === "string") {
-        presets.push({ label: field.key, value: field.key });
+        presets.push({
+          label: labelWithSource(field.key, field.key),
+          value: field.key,
+        });
       }
     } else if (field.type === "object") {
       // Tool outputs are registered as "object" — allow for string params too
       if (!paramType || paramType === "string" || paramType === "object") {
-        presets.push({ label: field.key, value: field.key });
+        presets.push({
+          label: labelWithSource(field.key, field.key),
+          value: field.key,
+        });
       }
     } else {
       // boolean — shown for undefined or exact type match
       if (!paramType || paramType === field.type) {
-        presets.push({ label: field.key, value: field.key });
+        presets.push({
+          label: labelWithSource(field.key, field.key),
+          value: field.key,
+        });
       }
     }
   }
@@ -77,6 +101,7 @@ export function resolveSourceLabel(
   stateKey: string,
   stateFields: { key: string; type: string }[],
   defaultValue?: string | null,
+  sourceLabels?: Map<string, string[]>,
 ): string {
   if (!stateKey) return "⚠ unmapped";
   if (stateKey === "__default__") {
@@ -89,10 +114,21 @@ export function resolveSourceLabel(
   if (quotedMatch) return `default (${quotedMatch[1]})`;
   // Known state field
   const field = stateFields.find((f) => f.key === stateKey);
-  if (field) return field.key;
+  if (field) {
+    if (sourceLabels?.has(field.key)) {
+      return `${field.key} (${sourceLabels.get(field.key)?.join(", ")})`;
+    }
+    return field.key;
+  }
   // Other [-1].content expression
   const lastContentMatch = /^(\w+)\[-1\]\.content$/.exec(stateKey);
-  if (lastContentMatch) return `latest ${lastContentMatch[1]} entry`;
+  if (lastContentMatch?.[1]) {
+    const baseKey = lastContentMatch[1];
+    if (sourceLabels?.has(baseKey)) {
+      return `latest ${baseKey} entry (${sourceLabels.get(baseKey)?.join(", ")})`;
+    }
+    return `latest ${baseKey} entry`;
+  }
   // Custom expression — truncate if long
   if (stateKey.length > 30) return `${stateKey.slice(0, 27)}...`;
   return stateKey;
