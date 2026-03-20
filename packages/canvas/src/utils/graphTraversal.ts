@@ -1,5 +1,19 @@
 import type { EdgeSchema, NodeSchema, StateField } from "@shared/schema";
 
+/** Rewrite the root key in a state expression: "old[-1].content" → "new[-1].content" */
+export function rewriteStateExpression(
+  expr: string,
+  oldKey: string,
+  newKey: string,
+): string {
+  if (!expr || !oldKey || oldKey === newKey) return expr;
+  if (expr === oldKey) return newKey;
+  if (expr.startsWith(`${oldKey}[`) || expr.startsWith(`${oldKey}.`)) {
+    return newKey + expr.slice(oldKey.length);
+  }
+  return expr;
+}
+
 /** Backward walk — returns all ancestor node IDs of `nodeId`. */
 export function getUpstreamNodeIds(
   nodeId: string,

@@ -179,3 +179,118 @@ describe("graphSlice", () => {
     expect(after).toHaveLength(before.length);
   });
 });
+
+describe("renameOutputKey", () => {
+  const toolNode = (
+    id: string,
+    outputKey: string,
+    inputMap: Record<string, string> = {},
+  ): NodeSchema =>
+    ({
+      id,
+      type: "tool",
+      label: id,
+      position: { x: 0, y: 0 },
+      config: { tool_name: id, input_map: inputMap, output_key: outputKey },
+    }) as NodeSchema;
+
+  const llmNode = (
+    id: string,
+    outputKey: string,
+    inputMap: Record<string, string> = {},
+  ): NodeSchema =>
+    ({
+      id,
+      type: "llm",
+      label: id,
+      position: { x: 0, y: 0 },
+      config: {
+        provider: "openai",
+        model: "gpt-4",
+        system_prompt: "",
+        temperature: 0.7,
+        max_tokens: 1000,
+        input_map: inputMap,
+        output_key: outputKey,
+      },
+    }) as NodeSchema;
+
+  const condNode = (id: string, field: string): NodeSchema =>
+    ({
+      id,
+      type: "condition",
+      label: id,
+      position: { x: 0, y: 0 },
+      config: {
+        condition: { type: "field_exists", field, branch: "yes" },
+        branches: {},
+        default_branch: "yes",
+      },
+    }) as NodeSchema;
+
+  it("rewrites downstream tool input_map values", () => {
+    useGraphStore.getState().newGraph("G");
+    useGraphStore.setState({
+      nodes: [
+        toolNode("t1", "old_result"),
+        toolNode("t2", "t2_result", { context: "old_result[-1].content" }),
+      ],
+    });
+    useGraphStore.getState().renameOutputKey("t1", "old_result", "new_result");
+    const t2 = useGraphStore.getState().nodes.find((n) => n.id === "t2");
+    expect(
+      (t2?.config as { input_map: Record<string, string> }).input_map.context,
+    ).toBe("new_result[-1].content");
+  });
+
+  it("rewrites downstream llm input_map values", () => {
+    useGraphStore.getState().newGraph("G");
+    useGraphStore.setState({
+      nodes: [
+        toolNode("t1", "old_result"),
+        llmNode("llm1", "response", { data: "old_result" }),
+      ],
+    });
+    useGraphStore.getState().renameOutputKey("t1", "old_result", "new_result");
+    const llm = useGraphStore.getState().nodes.find((n) => n.id === "llm1");
+    expect(
+      (llm?.config as { input_map: Record<string, string> }).input_map.data,
+    ).toBe("new_result");
+  });
+
+  it("rewrites condition node field", () => {
+    useGraphStore.getState().newGraph("G");
+    useGraphStore.setState({
+      nodes: [toolNode("t1", "old_result"), condNode("c1", "old_result")],
+    });
+    useGraphStore.getState().renameOutputKey("t1", "old_result", "new_result");
+    const c = useGraphStore.getState().nodes.find((n) => n.id === "c1");
+    expect(
+      (c?.config as { condition: { field: string } }).condition.field,
+    ).toBe("new_result");
+  });
+
+  it("renames state field entry", () => {
+    useGraphStore.getState().newGraph("G");
+    useGraphStore
+      .getState()
+      .addStateFields([
+        { key: "old_result", type: "object", reducer: "replace" },
+      ]);
+    useGraphStore.setState({ nodes: [toolNode("t1", "old_result")] });
+    useGraphStore.getState().renameOutputKey("t1", "old_result", "new_result");
+    const state = useGraphStore.getState().graph?.state ?? [];
+    expect(state.find((f) => f.key === "old_result")).toBeUndefined();
+    expect(state.find((f) => f.key === "new_result")).toBeDefined();
+  });
+
+  it("no-ops when oldKey === newKey", () => {
+    useGraphStore.getState().newGraph("G");
+    useGraphStore.setState({
+      nodes: [toolNode("t1", "result")],
+      dirty: false,
+    });
+    useGraphStore.getState().renameOutputKey("t1", "result", "result");
+    expect(useGraphStore.getState().dirty).toBe(false);
+  });
+});

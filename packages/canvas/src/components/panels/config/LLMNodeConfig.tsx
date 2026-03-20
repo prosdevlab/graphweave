@@ -25,6 +25,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -72,6 +73,7 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
   const stateFields = useGraphStore((s) => s.graph?.state ?? []);
   const graphNodes = useGraphStore((s) => s.nodes);
   const edges = useGraphStore((s) => s.edges);
+  const renameOutputKey = useGraphStore((s) => s.renameOutputKey);
   const providers = useSettingsStore((s) => s.providers);
   const loadProviders = useSettingsStore((s) => s.loadProviders);
 
@@ -83,6 +85,7 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     toRows(node.config.input_map),
   );
   const [expanded, setExpanded] = useState(false);
+  const committedOutputKeyRef = useRef(node.config.output_key);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(
     !node.config.provider || !node.config.model,
   );
@@ -151,6 +154,7 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
           !allPresets.some((p) => p.value === row.stateKey),
       })),
     );
+    committedOutputKeyRef.current = node.config.output_key;
   }, [node.id]);
 
   const models = useMemo(() => {
@@ -222,6 +226,17 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     },
     [onChange],
   );
+
+  const handleOutputKeyBlur = useCallback(() => {
+    if (node.config.output_key !== committedOutputKeyRef.current) {
+      renameOutputKey(
+        node.id,
+        committedOutputKeyRef.current,
+        node.config.output_key,
+      );
+      committedOutputKeyRef.current = node.config.output_key;
+    }
+  }, [node.id, node.config.output_key, renameOutputKey]);
 
   const handleAddRow = useCallback(() => {
     const updated = [
@@ -659,6 +674,7 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
             id="node-output-key"
             value={node.config.output_key}
             onChange={handleOutputKeyChange}
+            onBlur={handleOutputKeyBlur}
             placeholder="llm_response"
           />
         </div>

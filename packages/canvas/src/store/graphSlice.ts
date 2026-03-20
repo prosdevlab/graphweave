@@ -6,6 +6,7 @@ import {
   updateGraph,
 } from "@api/graphs";
 import type {
+  ConditionConfig,
   EdgeSchema,
   GraphSchema,
   NodeSchema,
@@ -13,6 +14,7 @@ import type {
 } from "@shared/schema";
 import { useUIStore } from "@store/uiSlice";
 import { create } from "zustand";
+import { rewriteStateExpression } from "../utils/graphTraversal";
 
 const DEFAULT_STATE: StateField[] = [
   { key: "messages", type: "list", reducer: "append", readonly: true },
@@ -86,6 +88,7 @@ export interface GraphSlice {
   loadGraphList: () => Promise<GraphSchema[]>;
   deleteGraphById: (id: string) => Promise<void>;
   renameGraphById: (id: string, name: string) => Promise<GraphSchema>;
+  renameOutputKey: (nodeId: string, oldKey: string, newKey: string) => void;
 }
 
 export const useGraphStore = create<GraphSlice>((set, get) => ({
@@ -315,5 +318,64 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
 
   renameGraphById: async (id, name) => {
     return updateGraph(id, { name });
+  },
+
+  renameOutputKey: (nodeId, oldKey, newKey) => {
+    if (!oldKey || oldKey === newKey) return;
+    set((s) => {
+      // 1. Update source node's output_key
+      const nodes = s.nodes.map((n) => {
+        if (n.id === nodeId && (n.type === "tool" || n.type === "llm")) {
+          return { ...n, config: { ...n.config, output_key: newKey } };
+        }
+        // 2. Rewrite input_map values in tool/llm nodes
+        if (n.type === "tool" || n.type === "llm") {
+          const inputMap = n.config.input_map as Record<string, string>;
+          let changed = false;
+          const newMap: Record<string, string> = {};
+          for (const [param, expr] of Object.entries(inputMap)) {
+            const rewritten = rewriteStateExpression(expr, oldKey, newKey);
+            if (rewritten !== expr) changed = true;
+            newMap[param] = rewritten;
+          }
+          if (changed) {
+            return { ...n, config: { ...n.config, input_map: newMap } };
+          }
+        }
+        // 3. Rewrite condition node field references
+        if (n.type === "condition") {
+          const cond = n.config.condition as ConditionConfig;
+          if ("field" in cond && cond.field) {
+            const rewritten = rewriteStateExpression(
+              cond.field,
+              oldKey,
+              newKey,
+            );
+            if (rewritten !== cond.field) {
+              return {
+                ...n,
+                config: {
+                  ...n.config,
+                  condition: { ...cond, field: rewritten },
+                },
+              };
+            }
+          }
+        }
+        return n;
+      }) as NodeSchema[];
+
+      // 4. Rename state field entry
+      const graph = s.graph
+        ? {
+            ...s.graph,
+            state: s.graph.state.map((f) =>
+              f.key === oldKey ? { ...f, key: newKey } : f,
+            ),
+          }
+        : null;
+
+      return { nodes, graph, dirty: true };
+    });
   },
 }));
