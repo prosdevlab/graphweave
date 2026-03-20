@@ -220,6 +220,32 @@ export function isEnumLike(param: { examples?: string[] | null }): boolean {
   return ex.every((e) => e.length <= 20);
 }
 
+/** Collect root state field keys already consumed as inputs by other nodes.
+ *  Used to prevent multiple tools from silently sharing `user_input`. */
+export function getClaimedInputKeys(
+  graphNodes: {
+    id: string;
+    type: string;
+    config: Record<string, unknown>;
+  }[],
+  excludeNodeId: string,
+): Set<string> {
+  const claimed = new Set<string>();
+  for (const n of graphNodes) {
+    if (n.id === excludeNodeId) continue;
+    if (n.type !== "tool" && n.type !== "llm") continue;
+    const inputMap = (n.config as { input_map?: Record<string, string> })
+      .input_map;
+    for (const expr of Object.values(inputMap ?? {})) {
+      if (expr && expr !== "__default__" && !/^"[^"]*"$/.test(expr)) {
+        const rootMatch = /^([^.[]+)/.exec(expr);
+        if (rootMatch?.[1]) claimed.add(rootMatch[1]);
+      }
+    }
+  }
+  return claimed;
+}
+
 export interface AutoMapResult {
   map: Record<string, string>;
   newFields: StateField[];
@@ -237,6 +263,7 @@ export interface AutoMapResult {
 export function autoMapParams(
   toolParams: ToolParameter[],
   stateFields: StateField[],
+  claimedInputKeys?: Set<string>,
 ): AutoMapResult {
   const map: Record<string, string> = {};
   const newFields: StateField[] = [];
@@ -291,18 +318,42 @@ export function autoMapParams(
 
     // user_input fallback — only for the pre-selected target param
     if (param.name === userInputTarget) {
-      const existing = stateFields.find(
-        (f) => f.key === "user_input" && f.type === "string",
-      );
-      if (!existing && !newFieldKeys.has("user_input")) {
-        newFields.push({
-          key: "user_input",
-          type: "string",
-          reducer: "replace",
-        });
-        newFieldKeys.add("user_input");
+      const inputClaimed = claimedInputKeys?.has("user_input");
+      if (inputClaimed) {
+        // user_input already taken by another node — create a unique field
+        let uniqueKey = `${param.name}_input`;
+        const existingKeys = new Set([
+          ...stateFields.map((f) => f.key),
+          ...newFieldKeys,
+        ]);
+        if (existingKeys.has(uniqueKey)) {
+          let suffix = 2;
+          while (existingKeys.has(`${uniqueKey}_${suffix}`)) suffix++;
+          uniqueKey = `${uniqueKey}_${suffix}`;
+        }
+        if (!newFieldKeys.has(uniqueKey)) {
+          newFields.push({
+            key: uniqueKey,
+            type: "string",
+            reducer: "replace",
+          });
+          newFieldKeys.add(uniqueKey);
+        }
+        map[param.name] = uniqueKey;
+      } else {
+        const existing = stateFields.find(
+          (f) => f.key === "user_input" && f.type === "string",
+        );
+        if (!existing && !newFieldKeys.has("user_input")) {
+          newFields.push({
+            key: "user_input",
+            type: "string",
+            reducer: "replace",
+          });
+          newFieldKeys.add("user_input");
+        }
+        map[param.name] = "user_input";
       }
-      map[param.name] = "user_input";
       continue;
     }
 
