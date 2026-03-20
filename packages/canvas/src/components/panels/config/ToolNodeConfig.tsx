@@ -26,8 +26,13 @@ import {
 } from "react";
 import {
   getRelevantFields,
+  getUpstreamNodeIds,
   isTerminalNode,
 } from "../../../utils/graphTraversal";
+import {
+  deduplicateOutputKey,
+  isAutoOutputKey,
+} from "../../../utils/nodeDefaults";
 import {
   type InputMapRow,
   autoMapParams,
@@ -73,6 +78,20 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
   const [expanded, setExpanded] = useState(false);
   const allMapped = rows.length > 0 && rows.every((r) => r.stateKey !== "");
   const [autoCreatedKeys, setAutoCreatedKeys] = useState<string[]>([]);
+
+  const sourceLabels = useMemo(() => {
+    const upstreamIds = getUpstreamNodeIds(node.id, edges);
+    const map = new Map<string, string[]>();
+    for (const n of graphNodes) {
+      if (!upstreamIds.has(n.id)) continue;
+      if (n.type === "llm" || n.type === "tool") {
+        const existing = map.get(n.config.output_key);
+        if (existing) existing.push(n.label);
+        else map.set(n.config.output_key, [n.label]);
+      }
+    }
+    return map;
+  }, [node.id, edges, graphNodes]);
 
   const allPresets = useMemo(
     () => buildPresetsForParam(stateFields),
@@ -138,6 +157,22 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
         }
       }
 
+      // Auto-rename output_key when selecting a tool (if still auto-generated)
+      const prevToolName = node.config.tool_name;
+      let newOutputKey = node.config.output_key;
+      if (isAutoOutputKey(node.config.output_key, prevToolName || undefined)) {
+        const desired = `${toolName}_result`;
+        const existingKeys = new Set(
+          graphNodes
+            .filter(
+              (n) =>
+                n.id !== node.id && (n.type === "tool" || n.type === "llm"),
+            )
+            .map((n) => (n.config as { output_key: string }).output_key),
+        );
+        newOutputKey = deduplicateOutputKey(desired, existingKeys);
+      }
+
       const selected = tools.find((t) => t.name === toolName);
       if (selected && selected.parameters.length > 0) {
         const result = autoMapParams(selected.parameters, stateFields);
@@ -153,12 +188,22 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
         }));
         setRows(newRows);
         onChange({
-          config: { tool_name: toolName, input_map: toRecord(newRows) },
+          config: {
+            tool_name: toolName,
+            input_map: toRecord(newRows),
+            output_key: newOutputKey,
+          },
         });
       } else {
         setAutoCreatedKeys([]);
         setRows([]);
-        onChange({ config: { tool_name: toolName, input_map: {} } });
+        onChange({
+          config: {
+            tool_name: toolName,
+            input_map: {},
+            output_key: newOutputKey,
+          },
+        });
       }
     },
     [
@@ -170,6 +215,8 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
       removeStateFields,
       graphNodes,
       node.id,
+      node.config.output_key,
+      node.config.tool_name,
     ],
   );
 
@@ -299,6 +346,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                     row.stateKey,
                     stateFields,
                     defaultDisplay,
+                    sourceLabels,
                   ) + (isAutoCreated ? " (auto)" : "");
                 return (
                   <button
@@ -364,6 +412,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
                 const filteredPresets = buildPresetsForParam(
                   relevantFields,
                   paramInfo?.type,
+                  sourceLabels,
                 );
                 const defaultDisplay =
                   paramInfo?.default ?? paramInfo?.examples?.[0];

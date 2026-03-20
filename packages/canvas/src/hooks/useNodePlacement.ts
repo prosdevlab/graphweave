@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import {
   NODE_DEFAULTS,
   SINGLETON_TYPES,
+  deduplicateOutputKey,
   findNearestEdge,
 } from "../utils/nodeDefaults";
 
@@ -38,6 +39,24 @@ export function useNodePlacement() {
       }
 
       const defaults = NODE_DEFAULTS[nodeType]();
+
+      // Dedup output_key for tool/llm nodes to prevent silent collisions
+      if (
+        (nodeType === "tool" || nodeType === "llm") &&
+        defaults.config &&
+        "output_key" in defaults.config
+      ) {
+        const existingKeys = new Set(
+          nodes
+            .filter((n) => n.type === "tool" || n.type === "llm")
+            .map((n) => (n.config as { output_key: string }).output_key),
+        );
+        defaults.config.output_key = deduplicateOutputKey(
+          defaults.config.output_key as string,
+          existingKeys,
+        );
+      }
+
       const newNode: NodeSchema = {
         id: crypto.randomUUID(),
         position,
