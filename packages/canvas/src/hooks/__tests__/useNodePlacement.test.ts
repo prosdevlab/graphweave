@@ -119,4 +119,64 @@ describe("useNodePlacement", () => {
     expect(success).toBe(false);
     expect(mockAddNode).not.toHaveBeenCalled();
   });
+
+  it("deduplicates output_key when placing second tool node", () => {
+    mockNodes = [
+      {
+        id: "tool-1",
+        type: "tool",
+        label: "Tool",
+        position: { x: 0, y: 0 },
+        config: { tool_name: "", input_map: {}, output_key: "tool_result" },
+      } as NodeSchema,
+    ];
+
+    const { result } = renderHook(() => useNodePlacement());
+    result.current.placeNode("tool", { x: 200, y: 200 });
+
+    expect(mockAddNode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: expect.objectContaining({ output_key: "tool_result_2" }),
+      }),
+    );
+  });
+
+  it("deduplicates output_key when splicing onto edge", () => {
+    mockNodes = [
+      {
+        id: "n1",
+        type: "start",
+        label: "Start",
+        position: { x: 0, y: 0 },
+        config: {},
+      } as NodeSchema,
+      {
+        id: "n2",
+        type: "end",
+        label: "End",
+        position: { x: 200, y: 0 },
+        config: {},
+      } as NodeSchema,
+      {
+        id: "tool-1",
+        type: "tool",
+        label: "Tool",
+        position: { x: 300, y: 100 },
+        config: { tool_name: "", input_map: {}, output_key: "tool_result" },
+      } as NodeSchema,
+    ];
+    mockEdges = [{ id: "e-n1-n2", source: "n1", target: "n2" }];
+
+    const { result } = renderHook(() => useNodePlacement());
+    result.current.placeNode("tool", { x: 100, y: 5 });
+
+    expect(mockSpliceEdge).toHaveBeenCalledWith(
+      "e-n1-n2",
+      expect.objectContaining({
+        config: expect.objectContaining({ output_key: "tool_result_2" }),
+      }),
+      expect.anything(),
+      expect.anything(),
+    );
+  });
 });

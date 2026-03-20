@@ -59,6 +59,32 @@ export const NODE_DEFAULTS: Record<string, () => Partial<NodeSchema>> = {
   }),
 };
 
+/** Dedup a key against existing keys: tool_result → tool_result_2 → tool_result_3 */
+export function deduplicateOutputKey(
+  desired: string,
+  existingKeys: Set<string>,
+): string {
+  if (!existingKeys.has(desired)) return desired;
+  let counter = 2;
+  while (existingKeys.has(`${desired}_${counter}`)) counter++;
+  return `${desired}_${counter}`;
+}
+
+/** True if the key is the generic default or a tool-derived auto-name. */
+const GENERIC_DEFAULT = /^tool_result(_\d+)?$/;
+
+export function isAutoOutputKey(key: string, prevToolName?: string): boolean {
+  if (GENERIC_DEFAULT.test(key)) return true;
+  if (prevToolName && key === `${prevToolName}_result`) return true;
+  if (
+    prevToolName &&
+    /^.+_result_\d+$/.test(key) &&
+    key.startsWith(`${prevToolName}_result`)
+  )
+    return true;
+  return false;
+}
+
 /** Node types that can only appear once in a graph */
 export const SINGLETON_TYPES = new Set(["start", "end"]);
 
