@@ -22,6 +22,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -37,6 +38,7 @@ import {
   type InputMapRow,
   autoMapParams,
   buildPresetsForParam,
+  getClaimedInputKeys,
   getExpressionYieldType,
   getMappingWarning,
   isEnumLike,
@@ -72,6 +74,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
   const edges = useGraphStore((s) => s.edges);
   const addStateFields = useGraphStore((s) => s.addStateFields);
   const removeStateFields = useGraphStore((s) => s.removeStateFields);
+  const renameOutputKey = useGraphStore((s) => s.renameOutputKey);
 
   const [rows, setRows] = useState<InputMapRow[]>(() =>
     toRows(node.config.input_map),
@@ -79,6 +82,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
   const [expanded, setExpanded] = useState(false);
   const allMapped = rows.length > 0 && rows.every((r) => r.stateKey !== "");
   const [autoCreatedKeys, setAutoCreatedKeys] = useState<string[]>([]);
+  const committedOutputKeyRef = useRef(node.config.output_key);
 
   const sourceLabels = useMemo(() => {
     const upstreamIds = getUpstreamNodeIds(node.id, edges);
@@ -127,6 +131,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
           !allPresets.some((p) => p.value === row.stateKey),
       })),
     );
+    committedOutputKeyRef.current = node.config.output_key;
   }, [node.id]);
 
   useEffect(() => {
@@ -174,9 +179,20 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
         newOutputKey = deduplicateOutputKey(desired, existingKeys);
       }
 
+      // Cascade output_key rename to downstream nodes before updating this node
+      if (newOutputKey !== node.config.output_key) {
+        renameOutputKey(node.id, node.config.output_key, newOutputKey);
+        committedOutputKeyRef.current = newOutputKey;
+      }
+
       const selected = tools.find((t) => t.name === toolName);
       if (selected && selected.parameters.length > 0) {
-        const result = autoMapParams(selected.parameters, stateFields);
+        const claimedInputKeys = getClaimedInputKeys(graphNodes, node.id);
+        const result = autoMapParams(
+          selected.parameters,
+          stateFields,
+          claimedInputKeys,
+        );
         setAutoCreatedKeys(result.newFields.map((f) => f.key));
         if (result.newFields.length > 0) {
           addStateFields(result.newFields);
@@ -188,6 +204,8 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
           customMode: false,
         }));
         setRows(newRows);
+        // output_key already set by renameOutputKey if changed, include it
+        // for the case where it didn't change
         onChange({
           config: {
             tool_name: toolName,
@@ -214,6 +232,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
       autoCreatedKeys,
       addStateFields,
       removeStateFields,
+      renameOutputKey,
       graphNodes,
       node.id,
       node.config.output_key,
@@ -227,6 +246,17 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
     },
     [onChange],
   );
+
+  const handleOutputKeyBlur = useCallback(() => {
+    if (node.config.output_key !== committedOutputKeyRef.current) {
+      renameOutputKey(
+        node.id,
+        committedOutputKeyRef.current,
+        node.config.output_key,
+      );
+      committedOutputKeyRef.current = node.config.output_key;
+    }
+  }, [node.id, node.config.output_key, renameOutputKey]);
 
   const handleSelectChange = useCallback(
     (index: number, value: string) => {
@@ -559,6 +589,7 @@ function ToolNodeConfigComponent({ node, onChange }: ToolNodeConfigProps) {
             id="node-output-key"
             value={node.config.output_key}
             onChange={handleOutputKeyChange}
+            onBlur={handleOutputKeyBlur}
             placeholder="tool_result"
           />
         </div>

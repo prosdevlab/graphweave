@@ -3,6 +3,7 @@ import {
   getRelevantFields,
   getUpstreamNodeIds,
   isTerminalNode,
+  rewriteStateExpression,
 } from "../graphTraversal";
 
 function edge(source: string, target: string): EdgeSchema {
@@ -470,5 +471,61 @@ describe("isTerminalNode", () => {
   it("outgoing target node not found → false (safety)", () => {
     const nodes = [toolNode("t", "r")]; // target "ghost" not in nodes
     expect(isTerminalNode("t", [edge("t", "ghost")], nodes)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rewriteStateExpression
+// ---------------------------------------------------------------------------
+
+describe("rewriteStateExpression", () => {
+  it("rewrites exact match", () => {
+    expect(rewriteStateExpression("old_key", "old_key", "new_key")).toBe(
+      "new_key",
+    );
+  });
+
+  it("rewrites bracket expression", () => {
+    expect(
+      rewriteStateExpression("old_key[-1].content", "old_key", "new_key"),
+    ).toBe("new_key[-1].content");
+  });
+
+  it("rewrites dot expression", () => {
+    expect(rewriteStateExpression("old_key.field", "old_key", "new_key")).toBe(
+      "new_key.field",
+    );
+  });
+
+  it("leaves unrelated key untouched", () => {
+    expect(rewriteStateExpression("other_key", "old_key", "new_key")).toBe(
+      "other_key",
+    );
+  });
+
+  it("leaves quoted literal untouched", () => {
+    expect(rewriteStateExpression('"old_key"', "old_key", "new_key")).toBe(
+      '"old_key"',
+    );
+  });
+
+  it("returns expr for empty oldKey", () => {
+    expect(rewriteStateExpression("something", "", "new_key")).toBe(
+      "something",
+    );
+  });
+
+  it("returns expr when oldKey === newKey", () => {
+    expect(rewriteStateExpression("key", "key", "key")).toBe("key");
+  });
+
+  it("returns empty string for empty expr", () => {
+    expect(rewriteStateExpression("", "old", "new")).toBe("");
+  });
+
+  it("does not rewrite partial prefix match", () => {
+    expect(rewriteStateExpression("old_key_extra", "old_key", "new_key")).toBe(
+      "old_key_extra",
+    );
   });
 });
