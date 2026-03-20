@@ -2,7 +2,8 @@ import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { CanvasProvider } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
-import { useEffect, useState } from "react";
+import { useRunStore } from "@store/runSlice";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useBeforeUnload } from "../../hooks/useBeforeUnload";
 import { NodeConfigPanel } from "../panels/NodeConfigPanel";
@@ -19,6 +20,15 @@ export function CanvasRoute() {
   const [loading, setLoading] = useState(true);
 
   useBeforeUnload();
+
+  const resetRun = useRunStore((s) => s.resetRun);
+  const prevIdRef = useRef(id);
+  useEffect(() => {
+    if (prevIdRef.current !== id) {
+      resetRun();
+    }
+    prevIdRef.current = id;
+  }, [id, resetRun]);
 
   useEffect(() => {
     if (!id) return;

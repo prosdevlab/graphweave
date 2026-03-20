@@ -12,12 +12,14 @@ HTMLDialogElement.prototype.close ??= vi.fn(function (this: HTMLDialogElement) {
 
 const mockNavigate = vi.fn();
 const mockLoadGraph = vi.fn(() => Promise.resolve());
+const mockResetRun = vi.fn();
 
 let mockGraph: { id: string; name: string } | null = null;
 let mockSaveError: string | null = null;
+let mockId = "test-id";
 
 vi.mock("react-router", () => ({
-  useParams: () => ({ id: "test-id" }),
+  useParams: () => ({ id: mockId }),
   useNavigate: () => mockNavigate,
   Link: ({
     to,
@@ -40,6 +42,11 @@ vi.mock("@store/graphSlice", () => ({
       nodes: [],
       edges: [],
     }),
+}));
+
+vi.mock("@store/runSlice", () => ({
+  useRunStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({ resetRun: mockResetRun }),
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -77,6 +84,7 @@ vi.mock("../../panels/StatePanel", () => ({
 beforeEach(() => {
   mockGraph = null;
   mockSaveError = null;
+  mockId = "test-id";
   vi.clearAllMocks();
   mockLoadGraph.mockResolvedValue(undefined);
 });
@@ -119,5 +127,20 @@ describe("CanvasRoute", () => {
     mockGraph = { id: "test-id", name: "Test" };
     render(<CanvasRoute />);
     expect(mockLoadGraph).not.toHaveBeenCalled();
+  });
+
+  it("does not call resetRun on initial mount", () => {
+    render(<CanvasRoute />);
+    expect(mockResetRun).not.toHaveBeenCalled();
+  });
+
+  it("calls resetRun when graph ID changes", () => {
+    mockId = "graph-a";
+    const { rerender } = render(<CanvasRoute />);
+    expect(mockResetRun).not.toHaveBeenCalled();
+
+    mockId = "graph-b";
+    rerender(<CanvasRoute />);
+    expect(mockResetRun).toHaveBeenCalledTimes(1);
   });
 });
