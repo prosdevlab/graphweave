@@ -42,14 +42,21 @@ SelectContent.displayName = "SelectContent";
 
 export const SelectItem = forwardRef<
   HTMLDivElement,
-  ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
->(({ className = "", children, ...props }, ref) => (
+  ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & {
+    description?: string;
+  }
+>(({ className = "", children, description, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={`cursor-pointer px-3 py-1.5 text-sm text-zinc-300 outline-none data-[highlighted]:bg-zinc-800 ${className}`}
     {...props}
   >
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    {description && (
+      <span className="block text-[10px] leading-tight text-zinc-500">
+        {description}
+      </span>
+    )}
   </SelectPrimitive.Item>
 ));
 SelectItem.displayName = "SelectItem";

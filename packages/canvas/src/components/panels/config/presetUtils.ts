@@ -4,6 +4,8 @@ import type { StateField } from "@shared/schema";
 export interface Preset {
   label: string;
   value: string;
+  /** Node name(s) that produce this field — shown as secondary hint, not in label */
+  sourceHint?: string;
 }
 
 export type FieldType =
@@ -33,23 +35,22 @@ export function buildPresetsForParam(
 ): Preset[] {
   const presets: Preset[] = [];
 
-  function labelWithSource(base: string, key: string): string {
-    if (sourceLabels?.has(key)) {
-      return `${base} (${sourceLabels.get(key)?.join(", ")})`;
-    }
-    return base;
+  function hintFor(key: string): string | undefined {
+    const labels = sourceLabels?.get(key);
+    return labels ? `from ${labels.join(", ")}` : undefined;
   }
 
   for (const field of stateFields) {
     if (field.type === "list") {
       if (!paramType || paramType === "string") {
-        const baseLabel =
+        const label =
           field.key === "messages"
             ? "User's message"
             : `Latest ${field.key} entry`;
         presets.push({
-          label: labelWithSource(baseLabel, field.key),
+          label,
           value: `${field.key}[-1].content`,
+          sourceHint: hintFor(field.key),
         });
       }
       // Raw list reference only for custom rows (no paramType)
@@ -63,31 +64,35 @@ export function buildPresetsForParam(
     } else if (field.type === "number") {
       if (!paramType || paramType === "number") {
         presets.push({
-          label: labelWithSource(field.key, field.key),
+          label: field.key,
           value: field.key,
+          sourceHint: hintFor(field.key),
         });
       }
     } else if (field.type === "string") {
       if (!paramType || paramType === "string") {
         presets.push({
-          label: labelWithSource(field.key, field.key),
+          label: field.key,
           value: field.key,
+          sourceHint: hintFor(field.key),
         });
       }
     } else if (field.type === "object") {
       // Tool outputs are registered as "object" — allow for string params too
       if (!paramType || paramType === "string" || paramType === "object") {
         presets.push({
-          label: labelWithSource(field.key, field.key),
+          label: field.key,
           value: field.key,
+          sourceHint: hintFor(field.key),
         });
       }
     } else {
       // boolean — shown for undefined or exact type match
       if (!paramType || paramType === field.type) {
         presets.push({
-          label: labelWithSource(field.key, field.key),
+          label: field.key,
           value: field.key,
+          sourceHint: hintFor(field.key),
         });
       }
     }
@@ -101,7 +106,6 @@ export function resolveSourceLabel(
   stateKey: string,
   stateFields: { key: string; type: string }[],
   defaultValue?: string | null,
-  sourceLabels?: Map<string, string[]>,
 ): string {
   if (!stateKey) return "⚠ unmapped";
   if (stateKey === "__default__") {
@@ -114,24 +118,35 @@ export function resolveSourceLabel(
   if (quotedMatch) return `default (${quotedMatch[1]})`;
   // Known state field
   const field = stateFields.find((f) => f.key === stateKey);
-  if (field) {
-    if (sourceLabels?.has(field.key)) {
-      return `${field.key} (${sourceLabels.get(field.key)?.join(", ")})`;
-    }
-    return field.key;
-  }
+  if (field) return field.key;
   // Other [-1].content expression
   const lastContentMatch = /^(\w+)\[-1\]\.content$/.exec(stateKey);
-  if (lastContentMatch?.[1]) {
-    const baseKey = lastContentMatch[1];
-    if (sourceLabels?.has(baseKey)) {
-      return `latest ${baseKey} entry (${sourceLabels.get(baseKey)?.join(", ")})`;
-    }
-    return `latest ${baseKey} entry`;
-  }
+  if (lastContentMatch) return `latest ${lastContentMatch[1]} entry`;
   // Custom expression — truncate if long
   if (stateKey.length > 30) return `${stateKey.slice(0, 27)}...`;
   return stateKey;
+}
+
+/** Resolve a source hint string from a stateKey and sourceLabels map. */
+export function resolveSourceHint(
+  stateKey: string,
+  sourceLabels: Map<string, string[]>,
+): string | undefined {
+  if (!stateKey || stateKey === "__default__" || stateKey === "user_input") {
+    return undefined;
+  }
+  if (stateKey === "messages[-1].content") return undefined;
+  if (/^"[^"]*"$/.test(stateKey)) return undefined;
+  // Direct key match
+  const labels = sourceLabels.get(stateKey);
+  if (labels) return `from ${labels.join(", ")}`;
+  // [-1].content expression — look up the base key
+  const match = /^(\w+)\[-1\]\.content$/.exec(stateKey);
+  if (match?.[1]) {
+    const baseLabels = sourceLabels.get(match[1]);
+    if (baseLabels) return `from ${baseLabels.join(", ")}`;
+  }
+  return undefined;
 }
 
 /** Infer the runtime type that an expression will yield. */

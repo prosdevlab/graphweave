@@ -38,6 +38,7 @@ import {
   buildPresetsForParam,
   getExpressionYieldType,
   getMappingWarning,
+  resolveSourceHint,
   resolveSourceLabel,
   toRecord,
 } from "./presetUtils";
@@ -455,7 +456,14 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
                       className="gap-1"
                     >
                       <Plus size={10} />
-                      {preset.label}
+                      <span>
+                        {preset.label}
+                        {preset.sourceHint && (
+                          <span className="ml-1 text-zinc-600">
+                            {preset.sourceHint}
+                          </span>
+                        )}
+                      </span>
                     </Button>
                   ))}
                 </div>
@@ -479,12 +487,8 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
           <div className="space-y-1">
             {rows.map((row) => {
               const mapped = row.stateKey !== "";
-              const label = resolveSourceLabel(
-                row.stateKey,
-                stateFields,
-                null,
-                sourceLabels,
-              );
+              const label = resolveSourceLabel(row.stateKey, stateFields, null);
+              const hint = resolveSourceHint(row.stateKey, sourceLabels);
               return (
                 <button
                   key={row.param || `unmapped-${row.stateKey}`}
@@ -500,7 +504,10 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
                     {row.param || "(unnamed)"}
                   </span>
                   <span className="text-zinc-600">←</span>
-                  <span className="text-zinc-500">{label}</span>
+                  <span className="text-zinc-500">
+                    {label}
+                    {hint && <span className="ml-1 text-zinc-600">{hint}</span>}
+                  </span>
                 </button>
               );
             })}
@@ -594,7 +601,11 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
                     </SelectTrigger>
                     <SelectContent>
                       {filteredPresets.map((p) => (
-                        <SelectItem key={p.value} value={p.value}>
+                        <SelectItem
+                          key={p.value}
+                          value={p.value}
+                          description={p.sourceHint}
+                        >
                           {p.label}
                         </SelectItem>
                       ))}
