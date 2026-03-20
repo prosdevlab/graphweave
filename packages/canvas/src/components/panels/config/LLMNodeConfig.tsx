@@ -29,6 +29,7 @@ import {
 } from "react";
 import {
   getRelevantFields,
+  getUpstreamNodeIds,
   isTerminalNode,
 } from "../../../utils/graphTraversal";
 import {
@@ -85,6 +86,20 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
     !node.config.provider || !node.config.model,
   );
 
+  const sourceLabels = useMemo(() => {
+    const upstreamIds = getUpstreamNodeIds(node.id, edges);
+    const map = new Map<string, string[]>();
+    for (const n of graphNodes) {
+      if (!upstreamIds.has(n.id)) continue;
+      if (n.type === "llm" || n.type === "tool") {
+        const existing = map.get(n.config.output_key);
+        if (existing) existing.push(n.label);
+        else map.set(n.config.output_key, [n.label]);
+      }
+    }
+    return map;
+  }, [node.id, edges, graphNodes]);
+
   const allPresets = useMemo(
     () => buildPresetsForParam(stateFields),
     [stateFields],
@@ -101,13 +116,13 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
   );
 
   const filteredPresets = useMemo(
-    () => buildPresetsForParam(relevantFields),
-    [relevantFields],
+    () => buildPresetsForParam(relevantFields, undefined, sourceLabels),
+    [relevantFields, sourceLabels],
   );
 
   const suggestionPresets = useMemo(
-    () => buildPresetsForParam(relevantFields, "string"),
-    [relevantFields],
+    () => buildPresetsForParam(relevantFields, "string", sourceLabels),
+    [relevantFields, sourceLabels],
   );
 
   const suggestions = useMemo(() => {
@@ -464,7 +479,12 @@ function LLMNodeConfigComponent({ node, onChange }: LLMNodeConfigProps) {
           <div className="space-y-1">
             {rows.map((row) => {
               const mapped = row.stateKey !== "";
-              const label = resolveSourceLabel(row.stateKey, stateFields, null);
+              const label = resolveSourceLabel(
+                row.stateKey,
+                stateFields,
+                null,
+                sourceLabels,
+              );
               return (
                 <button
                   key={row.param || `unmapped-${row.stateKey}`}

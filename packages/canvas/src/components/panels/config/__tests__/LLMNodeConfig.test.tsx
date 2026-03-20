@@ -123,7 +123,7 @@ describe("LLMNodeConfig", () => {
       edges: [{ id: "e1", source: "tool-1", target: "llm-1" }],
     };
     render(<LLMNodeConfig node={mockNode} onChange={vi.fn()} />);
-    expect(screen.getByText("tool_result")).toBeInTheDocument();
+    expect(screen.getByText("tool_result (Search)")).toBeInTheDocument();
   });
 
   it("clicking suggestion creates a persisted mapping row", async () => {
@@ -152,7 +152,7 @@ describe("LLMNodeConfig", () => {
     };
     const onChange = vi.fn();
     render(<LLMNodeConfig node={mockNode} onChange={onChange} />);
-    await userEvent.click(screen.getByText("tool_result"));
+    await userEvent.click(screen.getByText("tool_result (Search)"));
     expect(onChange).toHaveBeenCalledWith({
       config: { input_map: { tool_result: "tool_result" } },
     });
@@ -187,9 +187,9 @@ describe("LLMNodeConfig", () => {
     };
     render(<LLMNodeConfig node={mockNode} onChange={vi.fn()} />);
     // Both chips visible initially
-    expect(screen.getByText("tool_result")).toBeInTheDocument();
+    expect(screen.getByText("tool_result (Search)")).toBeInTheDocument();
     expect(screen.getByText("user_input")).toBeInTheDocument();
-    await userEvent.click(screen.getByText("tool_result"));
+    await userEvent.click(screen.getByText("tool_result (Search)"));
     // Chips are gone — now in expanded edit mode
     expect(
       screen.queryByText(/these fields are also available/i),
@@ -271,7 +271,7 @@ describe("LLMNodeConfig", () => {
       edges: [{ id: "e1", source: "tool-1", target: "llm-1" }],
     };
     render(<LLMNodeConfig node={mockNode} onChange={vi.fn()} />);
-    expect(screen.getByText("tool_result")).toBeInTheDocument();
+    expect(screen.getByText("tool_result (Search)")).toBeInTheDocument();
   });
 
   it("renders with existing input_map rows", () => {
@@ -284,5 +284,112 @@ describe("LLMNodeConfig", () => {
     };
     render(<LLMNodeConfig node={nodeWithMap} onChange={vi.fn()} />);
     expect(screen.getByText("context")).toBeInTheDocument();
+  });
+
+  it("chip shows source node label for upstream tool output", () => {
+    graphStoreOverride = {
+      graph: {
+        state: [
+          { key: "messages", type: "list", reducer: "append", readonly: true },
+          { key: "web_search_result", type: "object", reducer: "replace" },
+        ],
+      },
+      nodes: [
+        {
+          id: "tool-1",
+          type: "tool",
+          label: "Search",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "web_search",
+            input_map: {},
+            output_key: "web_search_result",
+          },
+        },
+        mockNode,
+      ],
+      edges: [{ id: "e1", source: "tool-1", target: "llm-1" }],
+    };
+    render(<LLMNodeConfig node={mockNode} onChange={vi.fn()} />);
+    expect(screen.getByText("web_search_result (Search)")).toBeInTheDocument();
+  });
+
+  it("shows distinct chips for two upstream tools", () => {
+    graphStoreOverride = {
+      graph: {
+        state: [
+          { key: "messages", type: "list", reducer: "append", readonly: true },
+          { key: "web_search_result", type: "object", reducer: "replace" },
+          { key: "weather_result", type: "object", reducer: "replace" },
+        ],
+      },
+      nodes: [
+        {
+          id: "tool-1",
+          type: "tool",
+          label: "Search",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "web_search",
+            input_map: {},
+            output_key: "web_search_result",
+          },
+        },
+        {
+          id: "tool-2",
+          type: "tool",
+          label: "Weather",
+          position: { x: 0, y: 100 },
+          config: {
+            tool_name: "weather",
+            input_map: {},
+            output_key: "weather_result",
+          },
+        },
+        mockNode,
+      ],
+      edges: [
+        { id: "e1", source: "tool-1", target: "llm-1" },
+        { id: "e2", source: "tool-2", target: "llm-1" },
+      ],
+    };
+    render(<LLMNodeConfig node={mockNode} onChange={vi.fn()} />);
+    expect(screen.getByText("web_search_result (Search)")).toBeInTheDocument();
+    expect(screen.getByText("weather_result (Weather)")).toBeInTheDocument();
+  });
+
+  it("collapsed summary shows source label", () => {
+    graphStoreOverride = {
+      graph: {
+        state: [
+          { key: "messages", type: "list", reducer: "append", readonly: true },
+          { key: "web_search_result", type: "object", reducer: "replace" },
+        ],
+      },
+      nodes: [
+        {
+          id: "tool-1",
+          type: "tool",
+          label: "Search",
+          position: { x: 0, y: 0 },
+          config: {
+            tool_name: "web_search",
+            input_map: {},
+            output_key: "web_search_result",
+          },
+        },
+        mockNode,
+      ],
+      edges: [{ id: "e1", source: "tool-1", target: "llm-1" }],
+    };
+    const nodeWithMap: LLMNode = {
+      ...mockNode,
+      config: {
+        ...mockNode.config,
+        input_map: { context: "web_search_result" },
+      },
+    };
+    render(<LLMNodeConfig node={nodeWithMap} onChange={vi.fn()} />);
+    expect(screen.getByText("web_search_result (Search)")).toBeInTheDocument();
   });
 });
