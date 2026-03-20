@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   autoMapParams,
   buildPresetsForParam,
+  getClaimedInputKeys,
   isEnumLike,
   resolveSourceHint,
   resolveSourceLabel,
@@ -685,5 +686,94 @@ describe("toRecord", () => {
       },
     ];
     expect(toRecord(rows)).toEqual({ action: '"now"' });
+  });
+});
+
+// -- getClaimedInputKeys --------------------------------------------------
+
+describe("getClaimedInputKeys", () => {
+  const makeNode = (
+    id: string,
+    type: string,
+    inputMap: Record<string, string> = {},
+  ) => ({
+    id,
+    type,
+    config: { input_map: inputMap },
+  });
+
+  it("returns user_input when another tool maps to it", () => {
+    const nodes = [
+      makeNode("t1", "tool", { query: "user_input" }),
+      makeNode("t2", "tool", {}),
+    ];
+    expect(getClaimedInputKeys(nodes, "t2")).toEqual(new Set(["user_input"]));
+  });
+
+  it("excludes the current node's own mappings", () => {
+    const nodes = [makeNode("t1", "tool", { query: "user_input" })];
+    expect(getClaimedInputKeys(nodes, "t1")).toEqual(new Set());
+  });
+
+  it("ignores __default__ and quoted literal values", () => {
+    const nodes = [
+      makeNode("t1", "tool", { action: "__default__", mode: '"now"' }),
+    ];
+    expect(getClaimedInputKeys(nodes, "t2")).toEqual(new Set());
+  });
+
+  it("handles bracket expressions: messages[-1].content → claims messages", () => {
+    const nodes = [
+      makeNode("llm1", "llm", { context: "messages[-1].content" }),
+    ];
+    expect(getClaimedInputKeys(nodes, "t1")).toEqual(new Set(["messages"]));
+  });
+
+  it("returns empty set when no other tool/llm nodes exist", () => {
+    const nodes = [makeNode("start", "start", {})];
+    expect(getClaimedInputKeys(nodes, "t1")).toEqual(new Set());
+  });
+});
+
+// -- autoMapParams with claimedInputKeys ----------------------------------
+
+describe("autoMapParams with claimedInputKeys", () => {
+  it("maps to {param_name}_input when user_input is claimed", () => {
+    const claimed = new Set(["user_input"]);
+    const result = autoMapParams(
+      [{ name: "url", type: "string", required: true, description: "URL" }],
+      [messagesField],
+      claimed,
+    );
+    expect(result.map.url).toBe("url_input");
+    expect(result.newFields).toHaveLength(1);
+    expect(result.newFields[0]).toMatchObject({
+      key: "url_input",
+      type: "string",
+    });
+  });
+
+  it("original behavior without claimedInputKeys", () => {
+    const result = autoMapParams(
+      [{ name: "url", type: "string", required: true, description: "URL" }],
+      [messagesField],
+    );
+    expect(result.map.url).toBe("user_input");
+  });
+
+  it("deduplicates when {param_name}_input already exists in stateFields", () => {
+    const urlInputField: StateField = {
+      key: "url_input",
+      type: "string",
+      reducer: "replace",
+    };
+    const claimed = new Set(["user_input"]);
+    const result = autoMapParams(
+      [{ name: "url", type: "string", required: true, description: "URL" }],
+      [messagesField, urlInputField],
+      claimed,
+    );
+    expect(result.map.url).toBe("url_input_2");
+    expect(result.newFields.find((f) => f.key === "url_input_2")).toBeDefined();
   });
 });
