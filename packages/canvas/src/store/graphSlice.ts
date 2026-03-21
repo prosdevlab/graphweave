@@ -1,9 +1,11 @@
 import {
+  type ValidateResponse,
   createGraph,
   deleteGraph,
   getGraph,
   listGraphs,
   updateGraph,
+  validateGraphServer,
 } from "@api/graphs";
 import type {
   ConditionConfig,
@@ -89,6 +91,7 @@ export interface GraphSlice {
   deleteGraphById: (id: string) => Promise<void>;
   renameGraphById: (id: string, name: string) => Promise<GraphSchema>;
   renameOutputKey: (nodeId: string, oldKey: string, newKey: string) => void;
+  validateServer: () => Promise<ValidateResponse>;
 }
 
 export const useGraphStore = create<GraphSlice>((set, get) => ({
@@ -377,5 +380,11 @@ export const useGraphStore = create<GraphSlice>((set, get) => ({
 
       return { nodes, graph, dirty: true };
     });
+  },
+
+  validateServer: async () => {
+    const { graph } = get();
+    if (!graph) return { valid: true, errors: [] };
+    return validateGraphServer(graph.id);
   },
 }));

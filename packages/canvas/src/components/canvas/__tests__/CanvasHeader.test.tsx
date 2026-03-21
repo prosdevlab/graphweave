@@ -34,6 +34,20 @@ vi.mock("react-router", () => ({
   useNavigate: () => mockNavigate,
 }));
 
+vi.mock("@contexts/CanvasContext", () => ({
+  useCanvasContext: () => ({
+    selectedNodeId: null,
+    setSelectedNodeId: vi.fn(),
+  }),
+}));
+
+vi.mock("@store/panelSlice", () => ({
+  usePanelStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      openSidePanel: vi.fn(),
+    }),
+}));
+
 beforeEach(() => {
   mockGraph = { name: "Test Graph" };
   mockDirty = false;

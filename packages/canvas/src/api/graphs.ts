@@ -1,7 +1,7 @@
 /** Graph CRUD service layer. */
 
 import type { GraphSchema } from "@shared/schema";
-import { request } from "./client";
+import { ApiError, request } from "./client";
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -80,4 +80,37 @@ export async function deleteGraph(id: string): Promise<void> {
   await request<void>(`/graphs/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+export interface ValidationError {
+  message: string;
+  node_ref: string | null;
+}
+
+export interface ValidateResponse {
+  valid: boolean;
+  errors: ValidationError[];
+}
+
+/** Server-side graph validation — POST /graphs/{graph_id}/validate */
+export async function validateGraphServer(
+  graphId: string,
+): Promise<ValidateResponse> {
+  try {
+    // Server returns 200 with { valid: true } on success
+    return await request<ValidateResponse>(
+      `/graphs/${encodeURIComponent(graphId)}/validate`,
+      { method: "POST" },
+    );
+  } catch (e) {
+    // Server returns 422 with validation errors — extract from ApiError.body
+    if (e instanceof ApiError && e.status === 422 && e.body) {
+      return e.body as ValidateResponse;
+    }
+    throw e;
+  }
 }

@@ -7,8 +7,6 @@ interface CanvasContextValue {
   reactFlowInstance: ReactFlowInstance | null;
   stampNodeType: string | null;
   setStampNodeType: (type: string | null) => void;
-  statePanelOpen: boolean;
-  setStatePanelOpen: (open: boolean) => void;
 }
 
 const CanvasContext = createContext<CanvasContextValue | null>(null);
@@ -16,7 +14,6 @@ const CanvasContext = createContext<CanvasContextValue | null>(null);
 export function CanvasProvider({ children }: { children: ReactNode }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [stampNodeType, setStampNodeType] = useState<string | null>(null);
-  const [statePanelOpen, setStatePanelOpen] = useState(false);
   const reactFlowInstance = useReactFlow();
 
   return (
@@ -27,8 +24,6 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         reactFlowInstance,
         stampNodeType,
         setStampNodeType,
-        statePanelOpen,
-        setStatePanelOpen,
       }}
     >
       {children}
