@@ -1,3 +1,4 @@
+import { validateGraphServer } from "@api/graphs";
 import { useGraphStore } from "@store/graphSlice";
 import { useRunStore } from "@store/runSlice";
 import { useUIStore } from "@store/uiSlice";
@@ -13,6 +14,12 @@ import {
 } from "react";
 import { useNavigate } from "react-router";
 import { validateGraph } from "../../utils/validateGraph";
+import {
+  ValidationErrorDialog,
+  type ValidationItem,
+  fromClientErrors,
+  fromServerErrors,
+} from "../dialogs/ValidationErrorDialog";
 import { RunInputDialog } from "./RunInputDialog";
 import { getConsumedInputFields } from "./runInputUtils";
 
@@ -28,6 +35,8 @@ function CanvasHeaderComponent() {
 
   const [editing, setEditing] = useState(false);
   const [inputDialogOpen, setInputDialogOpen] = useState(false);
+  const [validationItems, setValidationItems] = useState<ValidationItem[]>([]);
+  const [validationDialogOpen, setValidationDialogOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Show toast when saveError appears
@@ -74,18 +83,34 @@ function CanvasHeaderComponent() {
     saveGraph();
   }, [saveGraph]);
 
+  /** Proceed to either show input dialog or start run directly */
+  const proceedToRun = useCallback(() => {
+    const g = useGraphStore.getState().graph;
+    const { consumedFields } = getConsumedInputFields(
+      g?.state ?? [],
+      g?.nodes ?? [],
+    );
+    if (consumedFields.length === 0) {
+      if (g) useRunStore.getState().startRun(g.id, {});
+    } else {
+      setInputDialogOpen(true);
+    }
+  }, []);
+
   const handleRun = useCallback(async () => {
     const { nodes, edges, dirty: isDirty } = useGraphStore.getState();
 
-    const errors = validateGraph(nodes, edges);
-    if (errors.length > 0) {
-      useUIStore
-        .getState()
-        .showToast(errors[0]?.message ?? "Validation failed", "error");
+    // 1. Client-side validation (instant)
+    const clientErrors = validateGraph(nodes, edges);
+    if (clientErrors.length > 0) {
+      setValidationItems(fromClientErrors(clientErrors));
+      setValidationDialogOpen(true);
       return;
     }
 
+    // 2. Save if dirty
     if (isDirty) {
+      useUIStore.getState().showToast("Saving...", "info");
       await useGraphStore.getState().saveGraph();
       if (useGraphStore.getState().saveError) {
         useUIStore
@@ -98,21 +123,33 @@ function CanvasHeaderComponent() {
       }
     }
 
-    const graph = useGraphStore.getState().graph;
-    const { consumedFields } = getConsumedInputFields(
-      graph?.state ?? [],
-      graph?.nodes ?? [],
-    );
+    // 3. Server-side validation
+    const g = useGraphStore.getState().graph;
+    if (!g) return;
 
-    if (consumedFields.length === 0) {
-      // No user input needed — run immediately
-      if (graph) {
-        useRunStore.getState().startRun(graph.id, {});
+    try {
+      useUIStore.getState().showToast("Validating...", "info");
+      const result = await validateGraphServer(g.id);
+      useUIStore.getState().dismissToast();
+
+      if (!result.valid && result.errors.length > 0) {
+        setValidationItems(fromServerErrors(result.errors));
+        setValidationDialogOpen(true);
+        return;
       }
-    } else {
-      setInputDialogOpen(true);
+    } catch {
+      // Server validation failed to run — proceed anyway (client check passed)
+      useUIStore.getState().dismissToast();
     }
-  }, []);
+
+    // 4. Proceed to run
+    proceedToRun();
+  }, [proceedToRun]);
+
+  const handleRunAnyway = useCallback(() => {
+    setValidationDialogOpen(false);
+    proceedToRun();
+  }, [proceedToRun]);
 
   const handleRunSubmit = useCallback(
     (input: Record<string, unknown>) => {
@@ -211,6 +248,13 @@ function CanvasHeaderComponent() {
         open={inputDialogOpen}
         onClose={() => setInputDialogOpen(false)}
         onSubmit={handleRunSubmit}
+      />
+
+      <ValidationErrorDialog
+        open={validationDialogOpen}
+        onClose={() => setValidationDialogOpen(false)}
+        items={validationItems}
+        onRunAnyway={handleRunAnyway}
       />
     </>
   );
