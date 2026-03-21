@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useBeforeUnload } from "../../hooks/useBeforeUnload";
 import { NodeConfigPanel } from "../panels/NodeConfigPanel";
+import { RunHistoryPanel } from "../panels/RunHistoryPanel";
 import { RunPanel } from "../panels/RunPanel";
 import { StatePanel } from "../panels/StatePanel";
 import { ResizeHandle } from "../ui/ResizeHandle";
@@ -247,11 +248,7 @@ function CanvasWorkspace() {
             <SidePanel width={sideWidth}>
               {activeSidePanel === "config" && <NodeConfigPanel />}
               {activeSidePanel === "state" && <StatePanel />}
-              {activeSidePanel === "history" && (
-                <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                  No runs yet. Click Run to execute your graph.
-                </div>
-              )}
+              {activeSidePanel === "history" && <RunHistoryPanel />}
               {activeSidePanel === "schema" && (
                 <div className="flex h-full items-center justify-center text-sm text-zinc-500">
                   Schema viewer coming soon.

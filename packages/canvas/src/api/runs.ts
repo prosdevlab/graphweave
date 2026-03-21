@@ -62,6 +62,50 @@ export async function cancelRun(runId: string): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Run history
+// ---------------------------------------------------------------------------
+
+export type RunStatus = "running" | "paused" | "completed" | "error";
+
+export interface RunListItem {
+  id: string;
+  graph_id: string;
+  status: RunStatus;
+  input: Record<string, unknown>;
+  duration_ms: number | null;
+  created_at: string;
+  error: string | null;
+}
+
+export interface PaginatedRuns {
+  items: RunListItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  has_more: boolean;
+}
+
+/** List runs for a graph — GET /graphs/{graph_id}/runs */
+export async function listRunsForGraph(
+  graphId: string,
+  opts?: { status?: RunStatus; limit?: number; offset?: number },
+): Promise<PaginatedRuns> {
+  const params = new URLSearchParams();
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.limit != null) params.set("limit", String(opts.limit));
+  if (opts?.offset != null) params.set("offset", String(opts.offset));
+  const qs = params.toString();
+  return request<PaginatedRuns>(
+    `/graphs/${encodeURIComponent(graphId)}/runs${qs ? `?${qs}` : ""}`,
+  );
+}
+
+/** Delete a completed/error run — DELETE /runs/{run_id} */
+export async function deleteRun(runId: string): Promise<void> {
+  await request(`/runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+}
+
 /** Get current run status — GET /runs/{run_id}/status */
 export async function getRunStatus(runId: string): Promise<RunStatusResponse> {
   return request<RunStatusResponse>(
