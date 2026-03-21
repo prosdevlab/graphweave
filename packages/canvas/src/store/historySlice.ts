@@ -7,6 +7,8 @@ import {
 } from "@api/runs";
 import { create } from "zustand";
 
+export type { RunStatus } from "@api/runs";
+
 export interface HistorySlice {
   runs: RunListItem[];
   total: number;

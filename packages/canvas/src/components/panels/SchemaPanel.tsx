@@ -23,9 +23,13 @@ export function SchemaPanel() {
   const isValid = validationErrors.length === 0;
 
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(schemaJson);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(schemaJson);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard write may fail in non-secure contexts
+    }
   }, [schemaJson]);
 
   const handleDownload = useCallback(() => {
