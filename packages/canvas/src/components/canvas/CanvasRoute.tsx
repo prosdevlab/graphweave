@@ -10,6 +10,7 @@ import { useBeforeUnload } from "../../hooks/useBeforeUnload";
 import { NodeConfigPanel } from "../panels/NodeConfigPanel";
 import { RunHistoryPanel } from "../panels/RunHistoryPanel";
 import { RunPanel } from "../panels/RunPanel";
+import { SchemaPanel } from "../panels/SchemaPanel";
 import { StateInspector } from "../panels/StateInspector";
 import { StatePanel } from "../panels/StatePanel";
 import { ResizeHandle } from "../ui/ResizeHandle";
@@ -246,11 +247,7 @@ function CanvasWorkspace() {
               {activeSidePanel === "config" && <NodeConfigPanel />}
               {activeSidePanel === "state" && <StatePanel />}
               {activeSidePanel === "history" && <RunHistoryPanel />}
-              {activeSidePanel === "schema" && (
-                <div className="flex h-full items-center justify-center text-sm text-zinc-500">
-                  Schema viewer coming soon.
-                </div>
-              )}
+              {activeSidePanel === "schema" && <SchemaPanel />}
             </SidePanel>
           </>
         )}
