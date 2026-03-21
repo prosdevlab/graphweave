@@ -80,6 +80,7 @@ export function CanvasRoute() {
   useEffect(() => {
     if (prevIdRef.current !== id) {
       resetRun();
+      useHistoryStore.getState().reset();
     }
     prevIdRef.current = id;
   }, [id, resetRun]);
