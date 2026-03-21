@@ -1,9 +1,9 @@
-import { useCanvasContext } from "@contexts/CanvasContext";
 import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { CanvasProvider } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
 import { useHistoryStore } from "@store/historySlice";
+import { usePanelStore } from "@store/panelSlice";
 import { useRunStore } from "@store/runSlice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -127,17 +127,17 @@ export function CanvasRoute() {
 // ── CanvasWorkspace (inner, uses CanvasContext) ──────────────────────
 
 function CanvasWorkspace() {
-  const {
-    activeSidePanel,
-    sidePanelVisible,
-    bottomPanelVisible,
-    bottomPanelMinimized,
-    activeBottomTab,
-    toggleSidePanel,
-    toggleBottomPanel,
-    setBottomPanelVisible,
-    setBottomPanelMinimized,
-  } = useCanvasContext();
+  const activeSidePanel = usePanelStore((s) => s.activeSidePanel);
+  const sidePanelVisible = usePanelStore((s) => s.sidePanelVisible);
+  const bottomPanelVisible = usePanelStore((s) => s.bottomPanelVisible);
+  const bottomPanelMinimized = usePanelStore((s) => s.bottomPanelMinimized);
+  const activeBottomTab = usePanelStore((s) => s.activeBottomTab);
+  const toggleSidePanel = usePanelStore((s) => s.toggleSidePanel);
+  const toggleBottomPanel = usePanelStore((s) => s.toggleBottomPanel);
+  const setBottomPanelVisible = usePanelStore((s) => s.setBottomPanelVisible);
+  const setBottomPanelMinimized = usePanelStore(
+    (s) => s.setBottomPanelMinimized,
+  );
 
   const runStatus = useRunStore((s) => s.runStatus);
 

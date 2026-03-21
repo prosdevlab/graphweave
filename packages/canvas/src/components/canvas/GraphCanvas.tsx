@@ -1,5 +1,6 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
+import { usePanelStore } from "@store/panelSlice";
 import { useRunStore } from "@store/runSlice";
 import { useUIStore } from "@store/uiSlice";
 import {
@@ -94,11 +95,13 @@ export function GraphCanvas() {
     setSelectedNodeId,
     reactFlowInstance,
     stampNodeType,
-    openSidePanel,
-    setActiveBottomTab,
-    setBottomPanelVisible,
-    setBottomPanelMinimized,
   } = useCanvasContext();
+  const openSidePanel = usePanelStore((s) => s.openSidePanel);
+  const setActiveBottomTab = usePanelStore((s) => s.setActiveBottomTab);
+  const setBottomPanelVisible = usePanelStore((s) => s.setBottomPanelVisible);
+  const setBottomPanelMinimized = usePanelStore(
+    (s) => s.setBottomPanelMinimized,
+  );
   const toastMessage = useUIStore((s) => s.toastMessage);
   const toastVariant = useUIStore((s) => s.toastVariant);
   const dismissToast = useUIStore((s) => s.dismissToast);

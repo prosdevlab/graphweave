@@ -81,19 +81,26 @@ vi.mock("@contexts/CanvasContext", () => ({
     reactFlowInstance: null,
     stampNodeType: null,
     setStampNodeType: vi.fn(),
-    activeSidePanel: "config" as const,
-    sidePanelVisible: true,
-    bottomPanelVisible: false,
-    bottomPanelMinimized: false,
-    activeBottomTab: "timeline" as const,
-    toggleSidePanel: vi.fn(),
-    openSidePanel: vi.fn(),
-    closeSidePanel: vi.fn(),
-    setSidePanelVisible: vi.fn(),
-    setBottomPanelVisible: vi.fn(),
-    setBottomPanelMinimized: vi.fn(),
-    setActiveBottomTab: vi.fn(),
   }),
+}));
+
+vi.mock("@store/panelSlice", () => ({
+  usePanelStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      activeSidePanel: "config",
+      sidePanelVisible: true,
+      bottomPanelVisible: false,
+      bottomPanelMinimized: false,
+      activeBottomTab: "timeline",
+      toggleSidePanel: vi.fn(),
+      toggleBottomPanel: vi.fn(),
+      openSidePanel: vi.fn(),
+      closeSidePanel: vi.fn(),
+      setSidePanelVisible: vi.fn(),
+      setBottomPanelVisible: vi.fn(),
+      setBottomPanelMinimized: vi.fn(),
+      setActiveBottomTab: vi.fn(),
+    }),
 }));
 
 vi.mock("../CanvasHeader", () => ({

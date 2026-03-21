@@ -1,7 +1,7 @@
-import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
 import type { RunStatus } from "@store/historySlice";
 import { useHistoryStore } from "@store/historySlice";
+import { usePanelStore } from "@store/panelSlice";
 import { useRunStore } from "@store/runSlice";
 import {
   AlertCircle,
@@ -56,8 +56,11 @@ export function RunHistoryPanel() {
   const liveRunStatus = useRunStore((s) => s.runStatus);
   const activeRunId = useRunStore((s) => s.activeRunId);
 
-  const { setBottomPanelVisible, setBottomPanelMinimized, setActiveBottomTab } =
-    useCanvasContext();
+  const setBottomPanelVisible = usePanelStore((s) => s.setBottomPanelVisible);
+  const setBottomPanelMinimized = usePanelStore(
+    (s) => s.setBottomPanelMinimized,
+  );
+  const setActiveBottomTab = usePanelStore((s) => s.setActiveBottomTab);
 
   // Load runs on mount and when filter changes
   // statusFilter is read by loadRuns() via get(), but listed as dep to trigger reload

@@ -1,4 +1,5 @@
-import { type BottomTab, useCanvasContext } from "@contexts/CanvasContext";
+import type { BottomTab } from "@store/panelSlice";
+import { usePanelStore } from "@store/panelSlice";
 import { useRunStore } from "@store/runSlice";
 import { IconButton } from "@ui/IconButton";
 import { Minus, X } from "lucide-react";
@@ -18,13 +19,13 @@ interface BottomPanelProps {
 }
 
 export function BottomPanel({ height, children }: BottomPanelProps) {
-  const {
-    bottomPanelMinimized,
-    activeBottomTab,
-    setActiveBottomTab,
-    setBottomPanelMinimized,
-    setBottomPanelVisible,
-  } = useCanvasContext();
+  const bottomPanelMinimized = usePanelStore((s) => s.bottomPanelMinimized);
+  const activeBottomTab = usePanelStore((s) => s.activeBottomTab);
+  const setActiveBottomTab = usePanelStore((s) => s.setActiveBottomTab);
+  const setBottomPanelMinimized = usePanelStore(
+    (s) => s.setBottomPanelMinimized,
+  );
+  const setBottomPanelVisible = usePanelStore((s) => s.setBottomPanelVisible);
 
   const runStatus = useRunStore((s) => s.runStatus);
   const durationMs = useRunStore((s) => s.durationMs);

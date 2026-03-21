@@ -1,14 +1,12 @@
-import { useCanvasContext } from "@contexts/CanvasContext";
+import { usePanelStore } from "@store/panelSlice";
 import { Tooltip } from "@ui/Tooltip";
 import { PanelBottom, PanelLeft, PanelRight } from "lucide-react";
 
 export function PanelControlToolbar() {
-  const {
-    sidePanelVisible,
-    setSidePanelVisible,
-    bottomPanelVisible,
-    setBottomPanelVisible,
-  } = useCanvasContext();
+  const sidePanelVisible = usePanelStore((s) => s.sidePanelVisible);
+  const setSidePanelVisible = usePanelStore((s) => s.setSidePanelVisible);
+  const bottomPanelVisible = usePanelStore((s) => s.bottomPanelVisible);
+  const setBottomPanelVisible = usePanelStore((s) => s.setBottomPanelVisible);
 
   return (
     <div className="absolute top-3 right-3 z-10 flex items-center gap-0.5 rounded-md border border-zinc-800 bg-zinc-900/80 p-1 backdrop-blur-sm">
