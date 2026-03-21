@@ -2,7 +2,9 @@ import {
   type PaginatedRuns,
   type RunListItem,
   type RunStatus,
+  type RunStatusResponse,
   deleteRun as apiDeleteRun,
+  getRunStatus,
   listRunsForGraph,
 } from "@api/runs";
 import { create } from "zustand";
@@ -16,9 +18,14 @@ export interface HistorySlice {
   error: string | null;
   statusFilter: RunStatus | null;
 
+  /** The historical run currently being inspected (null = showing live run) */
+  inspectedRun: RunStatusResponse | null;
+
   loadRuns: (graphId: string) => Promise<void>;
   setStatusFilter: (status: RunStatus | null) => void;
   deleteRun: (runId: string) => Promise<void>;
+  inspectRun: (runId: string) => Promise<void>;
+  clearInspectedRun: () => void;
   reset: () => void;
 }
 
@@ -30,6 +37,7 @@ export const useHistoryStore = create<HistorySlice>((set, get) => ({
   loading: false,
   error: null,
   statusFilter: null,
+  inspectedRun: null,
 
   loadRuns: async (graphId: string) => {
     set({ loading: true, error: null });
@@ -59,12 +67,32 @@ export const useHistoryStore = create<HistorySlice>((set, get) => ({
       set((s) => ({
         runs: s.runs.filter((r) => r.id !== runId),
         total: s.total - 1,
+        // Clear inspected run if it was the deleted one
+        inspectedRun: s.inspectedRun?.run_id === runId ? null : s.inspectedRun,
       }));
     } catch (e) {
       set({
         error: e instanceof Error ? e.message : "Failed to delete run",
       });
     }
+  },
+
+  inspectRun: async (runId: string) => {
+    // If already inspecting this run, skip
+    if (get().inspectedRun?.run_id === runId) return;
+    set({ error: null });
+    try {
+      const status = await getRunStatus(runId);
+      set({ inspectedRun: status });
+    } catch (e) {
+      set({
+        error: e instanceof Error ? e.message : "Failed to load run details",
+      });
+    }
+  },
+
+  clearInspectedRun: () => {
+    set({ inspectedRun: null });
   },
 
   reset: () => {
@@ -74,6 +102,7 @@ export const useHistoryStore = create<HistorySlice>((set, get) => ({
       loading: false,
       error: null,
       statusFilter: null,
+      inspectedRun: null,
     });
   },
 }));

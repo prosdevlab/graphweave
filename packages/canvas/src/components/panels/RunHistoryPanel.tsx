@@ -51,9 +51,13 @@ export function RunHistoryPanel() {
   const loadRuns = useHistoryStore((s) => s.loadRuns);
   const setStatusFilter = useHistoryStore((s) => s.setStatusFilter);
   const deleteRun = useHistoryStore((s) => s.deleteRun);
+  const inspectRun = useHistoryStore((s) => s.inspectRun);
+  const clearInspectedRun = useHistoryStore((s) => s.clearInspectedRun);
   const liveRunStatus = useRunStore((s) => s.runStatus);
+  const activeRunId = useRunStore((s) => s.activeRunId);
 
-  const { setBottomPanelVisible, setActiveBottomTab } = useCanvasContext();
+  const { setBottomPanelVisible, setBottomPanelMinimized, setActiveBottomTab } =
+    useCanvasContext();
 
   // Load runs on mount and when filter changes
   // statusFilter is read by loadRuns() via get(), but listed as dep to trigger reload
@@ -76,10 +80,30 @@ export function RunHistoryPanel() {
     }
   }, [liveRunStatus, graphId, loadRuns]);
 
-  const handleRowClick = useCallback(() => {
-    setBottomPanelVisible(true);
-    setActiveBottomTab("timeline");
-  }, [setBottomPanelVisible, setActiveBottomTab]);
+  const handleRowClick = useCallback(
+    (runId: string) => {
+      const isLive = runId === activeRunId;
+      if (isLive) {
+        // Live run: show timeline with real-time events
+        clearInspectedRun();
+        setActiveBottomTab("timeline");
+      } else {
+        // Historical run: fetch status + show final state in debug tab
+        inspectRun(runId);
+        setActiveBottomTab("debug");
+      }
+      setBottomPanelVisible(true);
+      setBottomPanelMinimized(false);
+    },
+    [
+      activeRunId,
+      inspectRun,
+      clearInspectedRun,
+      setActiveBottomTab,
+      setBottomPanelVisible,
+      setBottomPanelMinimized,
+    ],
+  );
 
   const handleDelete = useCallback(
     (e: React.MouseEvent, runId: string) => {
@@ -149,7 +173,7 @@ export function RunHistoryPanel() {
               <button
                 key={run.id}
                 type="button"
-                onClick={handleRowClick}
+                onClick={() => handleRowClick(run.id)}
                 className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-800"
               >
                 <Icon
