@@ -28,6 +28,7 @@ const DEFAULT_BOTTOM_HEIGHT = 256;
 const MIN_SIDE_WIDTH = 240;
 const MAX_SIDE_WIDTH = 480;
 const MIN_BOTTOM_HEIGHT = 120;
+const MAX_BOTTOM_HEIGHT = 600;
 
 function loadPanelSizes(): { sideWidth: number; bottomHeight: number } {
   try {
@@ -41,7 +42,10 @@ function loadPanelSizes(): { sideWidth: number; bottomHeight: number } {
         ),
         bottomHeight: Math.max(
           MIN_BOTTOM_HEIGHT,
-          parsed.bottomHeight ?? DEFAULT_BOTTOM_HEIGHT,
+          Math.min(
+            MAX_BOTTOM_HEIGHT,
+            parsed.bottomHeight ?? DEFAULT_BOTTOM_HEIGHT,
+          ),
         ),
       };
     }

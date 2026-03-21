@@ -118,8 +118,11 @@ export function StateInspector() {
     );
   }
 
-  // Compute diff badges
-  const badges = computeDiff(prevSnapshot, snapshot);
+  // Compute diff badges (memoized to avoid re-stringify on every render)
+  const badges = useMemo(
+    () => computeDiff(prevSnapshot, snapshot),
+    [prevSnapshot, snapshot],
+  );
 
   return (
     <div className="p-4">

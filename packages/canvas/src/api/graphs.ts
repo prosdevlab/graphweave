@@ -1,7 +1,7 @@
 /** Graph CRUD service layer. */
 
 import type { GraphSchema } from "@shared/schema";
-import { ApiError, apiUrl, request } from "./client";
+import { ApiError, request } from "./client";
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -107,15 +107,9 @@ export async function validateGraphServer(
       { method: "POST" },
     );
   } catch (e) {
-    // Server returns 422 with validation errors — request() throws ApiError
-    if (e instanceof ApiError && e.status === 422) {
-      // Re-fetch the body for the structured error response
-      const response = await fetch(
-        apiUrl(`/graphs/${encodeURIComponent(graphId)}/validate`),
-        { method: "POST", headers: { "Content-Type": "application/json" } },
-      );
-      const body = await response.json();
-      return body as ValidateResponse;
+    // Server returns 422 with validation errors — extract from ApiError.body
+    if (e instanceof ApiError && e.status === 422 && e.body) {
+      return e.body as ValidateResponse;
     }
     throw e;
   }

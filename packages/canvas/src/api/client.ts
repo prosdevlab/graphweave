@@ -21,10 +21,12 @@ function friendlyMessage(status: number, detail: string | null): string {
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  body: unknown;
+  constructor(message: string, status: number, body?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.body = body ?? null;
   }
 }
 
@@ -54,6 +56,7 @@ export async function request<T>(
     throw new ApiError(
       friendlyMessage(response.status, detail),
       response.status,
+      body,
     );
   }
   if (response.status === 204) return undefined as T;
