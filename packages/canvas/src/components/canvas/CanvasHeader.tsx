@@ -137,8 +137,13 @@ function CanvasHeaderComponent() {
         return;
       }
     } catch {
-      // Server validation failed to run — proceed anyway (client check passed)
-      useUIStore.getState().dismissToast();
+      // Server validation unavailable — warn user but proceed (client check passed)
+      useUIStore
+        .getState()
+        .showToast(
+          "Server validation unavailable — proceeding with client checks only",
+          "info",
+        );
     }
 
     // 4. Proceed to run

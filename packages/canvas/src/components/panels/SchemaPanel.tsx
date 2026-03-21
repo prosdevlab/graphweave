@@ -1,4 +1,5 @@
 import { useGraphStore } from "@store/graphSlice";
+import { useUIStore } from "@store/uiSlice";
 import { Button } from "@ui/Button";
 import { CheckCircle2, Copy, Download, XCircle } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
@@ -28,7 +29,7 @@ export function SchemaPanel() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard write may fail in non-secure contexts
+      useUIStore.getState().showToast("Failed to copy to clipboard", "error");
     }
   }, [schemaJson]);
 

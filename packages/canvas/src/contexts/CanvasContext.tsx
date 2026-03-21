@@ -29,6 +29,7 @@ interface CanvasContextValue {
   openSidePanel: (panel: SidePanelId) => void;
   closeSidePanel: () => void;
   setSidePanelVisible: (visible: boolean) => void;
+  toggleBottomPanel: () => void;
   setBottomPanelVisible: (visible: boolean) => void;
   setBottomPanelMinimized: (minimized: boolean) => void;
   setActiveBottomTab: (tab: BottomTab) => void;
@@ -70,6 +71,10 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
     setSidePanelVisible(false);
   }, []);
 
+  const toggleBottomPanel = useCallback(() => {
+    setBottomPanelVisible((v) => !v);
+  }, []);
+
   return (
     <CanvasContext
       value={{
@@ -86,6 +91,7 @@ export function CanvasProvider({ children }: { children: ReactNode }) {
         toggleSidePanel,
         openSidePanel,
         closeSidePanel,
+        toggleBottomPanel,
         setSidePanelVisible,
         setBottomPanelVisible,
         setBottomPanelMinimized,

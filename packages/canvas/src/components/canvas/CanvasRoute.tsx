@@ -3,6 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { CanvasProvider } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
+import { useHistoryStore } from "@store/historySlice";
 import { useRunStore } from "@store/runSlice";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -133,6 +134,7 @@ function CanvasWorkspace() {
     bottomPanelMinimized,
     activeBottomTab,
     toggleSidePanel,
+    toggleBottomPanel,
     setBottomPanelVisible,
     setBottomPanelMinimized,
   } = useCanvasContext();
@@ -152,12 +154,13 @@ function CanvasWorkspace() {
     bottomHeightRef.current = bottomHeight;
   }, [bottomHeight]);
 
-  // Auto-open bottom panel on run start
+  // Auto-open bottom panel on run start + clear historical inspection
   const prevRunStatus = useRef(runStatus);
   useEffect(() => {
     if (prevRunStatus.current === "idle" && runStatus !== "idle") {
       setBottomPanelVisible(true);
       setBottomPanelMinimized(false);
+      useHistoryStore.getState().clearInspectedRun();
     }
     prevRunStatus.current = runStatus;
   }, [runStatus, setBottomPanelVisible, setBottomPanelMinimized]);
@@ -185,12 +188,12 @@ function CanvasWorkspace() {
       }
       if (e.key === "j" || e.key === "J") {
         e.preventDefault();
-        setBottomPanelVisible(!bottomPanelVisible);
+        toggleBottomPanel();
       }
     }
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [toggleSidePanel, bottomPanelVisible, setBottomPanelVisible]);
+  }, [toggleSidePanel, toggleBottomPanel]);
 
   // Resize handlers
   const handleSideResize = useCallback((delta: number) => {
