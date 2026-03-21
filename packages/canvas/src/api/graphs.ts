@@ -81,3 +81,36 @@ export async function deleteGraph(id: string): Promise<void> {
     method: "DELETE",
   });
 }
+
+// ---------------------------------------------------------------------------
+// Validation
+// ---------------------------------------------------------------------------
+
+export interface ValidationError {
+  message: string;
+  node_ref: string | null;
+}
+
+export interface ValidateResponse {
+  valid: boolean;
+  errors: ValidationError[];
+}
+
+/** Server-side graph validation — POST /graphs/{graph_id}/validate */
+export async function validateGraphServer(
+  graphId: string,
+): Promise<ValidateResponse> {
+  const url = `/graphs/${encodeURIComponent(graphId)}/validate`;
+  const response = await fetch(`/api${url}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  // Server returns 200 with { valid, errors } even on validation failure
+  // It may also return 422 with errors in the body
+  const body = await response.json();
+  if (response.ok || response.status === 422) {
+    return body as ValidateResponse;
+  }
+  const detail = typeof body?.detail === "string" ? body.detail : null;
+  throw new Error(detail ?? `Validation request failed (${response.status})`);
+}
