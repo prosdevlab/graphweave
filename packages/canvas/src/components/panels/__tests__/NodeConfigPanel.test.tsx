@@ -86,11 +86,12 @@ beforeEach(() => {
 });
 
 describe("NodeConfigPanel", () => {
-  it("renders nothing (closed sheet) when no node is selected", () => {
+  it("renders empty state when no node is selected", () => {
     mockSelectedNodeId = null;
-    const { container } = render(<NodeConfigPanel />);
-    const sheet = container.querySelector("[role='dialog']");
-    expect(sheet).toHaveAttribute("aria-hidden", "true");
+    render(<NodeConfigPanel />);
+    expect(
+      screen.getByText("Click a node to edit its configuration."),
+    ).toBeInTheDocument();
   });
 
   it('renders StartNodeConfig when selected node is type "start"', () => {
@@ -113,13 +114,6 @@ describe("NodeConfigPanel", () => {
     render(<NodeConfigPanel />);
     expect(screen.getByText("END Node")).toBeInTheDocument();
     expect(screen.getByText(/exit point/i)).toBeInTheDocument();
-  });
-
-  it("clicking close button calls setSelectedNodeId(null)", async () => {
-    mockSelectedNodeId = "s1";
-    render(<NodeConfigPanel />);
-    await userEvent.click(screen.getByLabelText("Close panel"));
-    expect(mockSetSelectedNodeId).toHaveBeenCalledWith(null);
   });
 
   it("clicking delete button calls removeNode and clears selection", async () => {

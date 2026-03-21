@@ -1,7 +1,6 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import type { NodeSchema, StateField } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
-import { Sheet } from "@ui/Sheet";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractRootKey } from "../canvas/runInputUtils";
 import { AddFieldForm } from "./AddFieldForm";
@@ -56,8 +55,7 @@ function computeFieldUsage(fieldKey: string, nodes: NodeSchema[]): FieldUsage {
 }
 
 export function StatePanel() {
-  const { statePanelOpen, setStatePanelOpen, setSelectedNodeId } =
-    useCanvasContext();
+  const { setSelectedNodeId } = useCanvasContext();
   const stateFields = useGraphStore((s) => s.graph?.state ?? []);
   const nodes = useGraphStore((s) => s.nodes);
   const addStateFields = useGraphStore((s) => s.addStateFields);
@@ -127,50 +125,43 @@ export function StatePanel() {
 
   return (
     <>
-      <Sheet
-        open={statePanelOpen}
-        onClose={() => setStatePanelOpen(false)}
-        title="State Fields"
-        side="left"
-      >
-        <p className="mb-3 text-[10px] text-zinc-500">
-          State fields carry data between nodes. Each field is available as an
-          input source when configuring Tool and LLM nodes.
-          {stateFields.length > 0 && (
-            <>
-              <br />
-              Click a node name to jump to its config.
-            </>
-          )}
-        </p>
-
-        {stateFields.length === 0 ? (
-          <p className="mb-3 text-xs text-zinc-500">
-            No state fields yet. Add one below.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {stateFields.map((field) => (
-              <StateFieldRow
-                key={field.key}
-                field={field}
-                usage={usageMap.get(field.key) ?? { readers: [], writers: [] }}
-                onDelete={() => handleDelete(field)}
-                onNodeClick={handleNodeClick}
-              />
-            ))}
-          </div>
+      <p className="mb-3 text-[10px] text-zinc-500">
+        State fields carry data between nodes. Each field is available as an
+        input source when configuring Tool and LLM nodes.
+        {stateFields.length > 0 && (
+          <>
+            <br />
+            Click a node name to jump to its config.
+          </>
         )}
+      </p>
 
-        <div className="mt-4 border-t border-zinc-800 pt-3">
-          <p className="mb-1 text-xs font-medium text-zinc-300">Add a field</p>
-          <p className="mb-2 text-[10px] text-zinc-500">
-            Default fields and tool parameters are added automatically. Add a
-            custom field here for data not tied to a specific tool.
-          </p>
-          <AddFieldForm existingKeys={existingKeys} onAdd={handleAdd} />
+      {stateFields.length === 0 ? (
+        <p className="mb-3 text-xs text-zinc-500">
+          No state fields yet. Add one below.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {stateFields.map((field) => (
+            <StateFieldRow
+              key={field.key}
+              field={field}
+              usage={usageMap.get(field.key) ?? { readers: [], writers: [] }}
+              onDelete={() => handleDelete(field)}
+              onNodeClick={handleNodeClick}
+            />
+          ))}
         </div>
-      </Sheet>
+      )}
+
+      <div className="mt-4 border-t border-zinc-800 pt-3">
+        <p className="mb-1 text-xs font-medium text-zinc-300">Add a field</p>
+        <p className="mb-2 text-[10px] text-zinc-500">
+          Default fields and tool parameters are added automatically. Add a
+          custom field here for data not tied to a specific tool.
+        </p>
+        <AddFieldForm existingKeys={existingKeys} onAdd={handleAdd} />
+      </div>
 
       {/* Undo toast */}
       {deletedField && (

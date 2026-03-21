@@ -5,11 +5,8 @@ import { StatePanel } from "../StatePanel";
 
 // Mock CanvasContext
 const mockSetSelectedNodeId = vi.fn();
-const mockSetStatePanelOpen = vi.fn();
 vi.mock("@contexts/CanvasContext", () => ({
   useCanvasContext: () => ({
-    statePanelOpen: true,
-    setStatePanelOpen: mockSetStatePanelOpen,
     setSelectedNodeId: mockSetSelectedNodeId,
   }),
 }));

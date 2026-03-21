@@ -45,8 +45,24 @@ vi.mock("@store/graphSlice", () => ({
 }));
 
 vi.mock("@store/runSlice", () => ({
-  useRunStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ resetRun: mockResetRun }),
+  useRunStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({
+        resetRun: mockResetRun,
+        runStatus: "idle",
+        runOutput: [],
+        durationMs: null,
+        activeRunId: null,
+        errorMessage: null,
+        errorTitle: null,
+        pausedPrompt: null,
+      }),
+    {
+      getState: () => ({
+        runStatus: "idle",
+      }),
+    },
+  ),
 }));
 
 vi.mock("@xyflow/react", () => ({
@@ -59,6 +75,25 @@ vi.mock("@contexts/CanvasContext", () => ({
   CanvasProvider: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  useCanvasContext: () => ({
+    selectedNodeId: null,
+    setSelectedNodeId: vi.fn(),
+    reactFlowInstance: null,
+    stampNodeType: null,
+    setStampNodeType: vi.fn(),
+    activeSidePanel: "config" as const,
+    sidePanelVisible: true,
+    bottomPanelVisible: false,
+    bottomPanelMinimized: false,
+    activeBottomTab: "timeline" as const,
+    toggleSidePanel: vi.fn(),
+    openSidePanel: vi.fn(),
+    closeSidePanel: vi.fn(),
+    setSidePanelVisible: vi.fn(),
+    setBottomPanelVisible: vi.fn(),
+    setBottomPanelMinimized: vi.fn(),
+    setActiveBottomTab: vi.fn(),
+  }),
 }));
 
 vi.mock("../CanvasHeader", () => ({

@@ -1,7 +1,7 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
 import { Tooltip } from "@ui/Tooltip";
-import { CircuitBoard, Database, MousePointer2, X } from "lucide-react";
+import { CircuitBoard, MousePointer2, X } from "lucide-react";
 import {
   type DragEvent,
   useCallback,
@@ -13,8 +13,7 @@ import { TOOLBAR_ITEMS } from "../../constants/toolbarItems";
 import { SINGLETON_TYPES } from "../../utils/nodeDefaults";
 
 function FloatingToolbarComponent() {
-  const { stampNodeType, setStampNodeType, statePanelOpen, setStatePanelOpen } =
-    useCanvasContext();
+  const { stampNodeType, setStampNodeType } = useCanvasContext();
   const nodes = useGraphStore((s) => s.nodes);
   const [expanded, setExpanded] = useState(stampNodeType !== null);
 
@@ -162,7 +161,7 @@ function FloatingToolbarComponent() {
           </div>
         </>
       ) : (
-        /* Collapsed: Pointer + Nodes + State */
+        /* Collapsed: Pointer + Nodes */
         <div className="flex flex-col gap-1 p-1.5">
           <Tooltip content="Pointer" side="right">
             <button
@@ -187,22 +186,6 @@ function FloatingToolbarComponent() {
               aria-label="Nodes"
             >
               <CircuitBoard size={16} />
-            </button>
-          </Tooltip>
-
-          <Tooltip content="State fields" side="right">
-            <button
-              type="button"
-              onClick={() => setStatePanelOpen(!statePanelOpen)}
-              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
-                statePanelOpen
-                  ? "bg-zinc-700/50 text-zinc-100"
-                  : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
-              }`}
-              aria-label="State fields"
-              aria-pressed={statePanelOpen}
-            >
-              <Database size={16} />
             </button>
           </Tooltip>
         </div>

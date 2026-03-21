@@ -8,7 +8,6 @@ import type {
 } from "@shared/schema";
 import { useGraphStore } from "@store/graphSlice";
 import { Button } from "@ui/Button";
-import { Sheet } from "@ui/Sheet";
 import { Trash2 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { ConditionNodeConfig } from "./config/ConditionNodeConfig";
@@ -45,34 +44,31 @@ export function NodeConfigPanel() {
     }
   }, [selectedNodeId, removeNode, setSelectedNodeId]);
 
-  const handleClose = useCallback(() => {
-    setSelectedNodeId(null);
-  }, [setSelectedNodeId]);
+  if (!selectedNode) {
+    return (
+      <p className="mt-8 text-center text-sm text-zinc-500">
+        Click a node to edit its configuration.
+      </p>
+    );
+  }
 
   return (
-    <Sheet
-      open={!!selectedNode}
-      onClose={handleClose}
-      title={selectedNode ? `${selectedNode.type.toUpperCase()} Node` : ""}
-      side="right"
-    >
-      {selectedNode && (
-        <>
-          {renderConfigForm(selectedNode, handleChange)}
-
-          <div className="mt-6 border-t border-zinc-800 pt-4">
-            <Button
-              variant="ghost"
-              onClick={handleDelete}
-              className="text-red-400 hover:text-red-300"
-            >
-              <Trash2 size={14} className="mr-1" />
-              Delete Node
-            </Button>
-          </div>
-        </>
-      )}
-    </Sheet>
+    <>
+      <h3 className="mb-3 text-xs font-semibold tracking-wide text-zinc-400">
+        {selectedNode.type.toUpperCase()} Node
+      </h3>
+      {renderConfigForm(selectedNode, handleChange)}
+      <div className="mt-6 border-t border-zinc-800 pt-4">
+        <Button
+          variant="ghost"
+          onClick={handleDelete}
+          className="text-red-400 hover:text-red-300"
+        >
+          <Trash2 size={14} className="mr-1" />
+          Delete Node
+        </Button>
+      </div>
+    </>
   );
 }
 
