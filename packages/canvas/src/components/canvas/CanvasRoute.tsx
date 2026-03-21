@@ -10,6 +10,7 @@ import { useBeforeUnload } from "../../hooks/useBeforeUnload";
 import { NodeConfigPanel } from "../panels/NodeConfigPanel";
 import { RunHistoryPanel } from "../panels/RunHistoryPanel";
 import { RunPanel } from "../panels/RunPanel";
+import { StateInspector } from "../panels/StateInspector";
 import { StatePanel } from "../panels/StatePanel";
 import { ResizeHandle } from "../ui/ResizeHandle";
 import { ActivityBar } from "./ActivityBar";
@@ -230,11 +231,7 @@ function CanvasWorkspace() {
           {showBottomPanel && (
             <BottomPanel height={bottomHeight}>
               {activeBottomTab === "timeline" && <RunPanel />}
-              {activeBottomTab === "debug" && (
-                <div className="flex h-full items-center justify-center p-4 text-sm text-zinc-500">
-                  Click a node in the timeline to inspect its state.
-                </div>
-              )}
+              {activeBottomTab === "debug" && <StateInspector />}
             </BottomPanel>
           )}
         </div>
