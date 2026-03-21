@@ -1,5 +1,6 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
+import { useRunStore } from "@store/runSlice";
 import { useUIStore } from "@store/uiSlice";
 import {
   Background,
@@ -27,6 +28,7 @@ import { useNodePlacement } from "../../hooks/useNodePlacement";
 import { toRFEdge, toRFNode } from "../../types/mappers";
 import { CanvasHint } from "./CanvasHint";
 import { FloatingToolbar } from "./FloatingToolbar";
+import { PanelControlToolbar } from "./PanelControlToolbar";
 import { SnapConnectionLine } from "./SnapConnectionLine";
 import { StampGhost } from "./StampGhost";
 import { nodeTypes } from "./nodes/nodeTypes";
@@ -92,6 +94,10 @@ export function GraphCanvas() {
     setSelectedNodeId,
     reactFlowInstance,
     stampNodeType,
+    openSidePanel,
+    setActiveBottomTab,
+    setBottomPanelVisible,
+    setBottomPanelMinimized,
   } = useCanvasContext();
   const toastMessage = useUIStore((s) => s.toastMessage);
   const toastVariant = useUIStore((s) => s.toastVariant);
@@ -280,8 +286,23 @@ export function GraphCanvas() {
   const onNodeClick: NodeMouseHandler = useCallback(
     (_event, node) => {
       setSelectedNodeId(node.id);
+      const status = useRunStore.getState().runStatus;
+      if (status === "idle") {
+        openSidePanel("config");
+      } else {
+        // Debug mode: show state inspector in bottom panel
+        setActiveBottomTab("debug");
+        setBottomPanelVisible(true);
+        setBottomPanelMinimized(false);
+      }
     },
-    [setSelectedNodeId],
+    [
+      setSelectedNodeId,
+      openSidePanel,
+      setActiveBottomTab,
+      setBottomPanelVisible,
+      setBottomPanelMinimized,
+    ],
   );
 
   const onPaneClick = useCallback(
@@ -349,6 +370,7 @@ export function GraphCanvas() {
         />
       </ReactFlow>
       <FloatingToolbar />
+      <PanelControlToolbar />
       <StampGhost />
       <CanvasHint nodeCount={storeNodes.length} />
       {toastMessage && (
