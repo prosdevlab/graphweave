@@ -1,4 +1,5 @@
-import { type SidePanelId, useCanvasContext } from "@contexts/CanvasContext";
+import type { SidePanelId } from "@store/panelSlice";
+import { usePanelStore } from "@store/panelSlice";
 import { Tooltip } from "@ui/Tooltip";
 import { Braces, Clock, Database, Settings, Terminal } from "lucide-react";
 
@@ -15,13 +16,11 @@ const SIDE_ITEMS: {
 ];
 
 export function ActivityBar() {
-  const {
-    activeSidePanel,
-    sidePanelVisible,
-    toggleSidePanel,
-    bottomPanelVisible,
-    setBottomPanelVisible,
-  } = useCanvasContext();
+  const activeSidePanel = usePanelStore((s) => s.activeSidePanel);
+  const sidePanelVisible = usePanelStore((s) => s.sidePanelVisible);
+  const toggleSidePanel = usePanelStore((s) => s.toggleSidePanel);
+  const bottomPanelVisible = usePanelStore((s) => s.bottomPanelVisible);
+  const toggleBottomPanel = usePanelStore((s) => s.toggleBottomPanel);
 
   return (
     <div className="flex w-10 shrink-0 flex-col items-center justify-between border-r border-zinc-800 bg-zinc-950 py-2">
@@ -59,7 +58,7 @@ export function ActivityBar() {
         <Tooltip content="Toggle Terminal ⌘J" side="right">
           <button
             type="button"
-            onClick={() => setBottomPanelVisible(!bottomPanelVisible)}
+            onClick={toggleBottomPanel}
             className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
               bottomPanelVisible
                 ? "text-zinc-100"

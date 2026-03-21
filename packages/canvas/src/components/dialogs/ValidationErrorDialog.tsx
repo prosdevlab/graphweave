@@ -1,4 +1,5 @@
 import { useCanvasContext } from "@contexts/CanvasContext";
+import { usePanelStore } from "@store/panelSlice";
 import { Button } from "@ui/Button";
 import { Dialog } from "@ui/Dialog";
 import { AlertCircle, XCircle } from "lucide-react";
@@ -23,7 +24,8 @@ export function ValidationErrorDialog({
   items,
   onRunAnyway,
 }: ValidationErrorDialogProps) {
-  const { setSelectedNodeId, openSidePanel } = useCanvasContext();
+  const { setSelectedNodeId } = useCanvasContext();
+  const openSidePanel = usePanelStore((s) => s.openSidePanel);
 
   const errors = items.filter((i) => i.severity === "error");
   const warnings = items.filter((i) => i.severity === "warning");

@@ -38,8 +38,14 @@ vi.mock("@contexts/CanvasContext", () => ({
   useCanvasContext: () => ({
     selectedNodeId: null,
     setSelectedNodeId: vi.fn(),
-    openSidePanel: vi.fn(),
   }),
+}));
+
+vi.mock("@store/panelSlice", () => ({
+  usePanelStore: (selector: (s: Record<string, unknown>) => unknown) =>
+    selector({
+      openSidePanel: vi.fn(),
+    }),
 }));
 
 beforeEach(() => {

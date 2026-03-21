@@ -1,4 +1,5 @@
-import { type SidePanelId, useCanvasContext } from "@contexts/CanvasContext";
+import type { SidePanelId } from "@store/panelSlice";
+import { usePanelStore } from "@store/panelSlice";
 import { IconButton } from "@ui/IconButton";
 import { X } from "lucide-react";
 import type { ReactNode } from "react";
@@ -16,7 +17,8 @@ interface SidePanelProps {
 }
 
 export function SidePanel({ width, children }: SidePanelProps) {
-  const { activeSidePanel, closeSidePanel } = useCanvasContext();
+  const activeSidePanel = usePanelStore((s) => s.activeSidePanel);
+  const closeSidePanel = usePanelStore((s) => s.closeSidePanel);
 
   if (!activeSidePanel) return null;
 
