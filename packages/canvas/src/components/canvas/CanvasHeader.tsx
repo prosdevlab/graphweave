@@ -1,4 +1,3 @@
-import { validateGraphServer } from "@api/graphs";
 import { useGraphStore } from "@store/graphSlice";
 import { useRunStore } from "@store/runSlice";
 import { useUIStore } from "@store/uiSlice";
@@ -129,7 +128,7 @@ function CanvasHeaderComponent() {
 
     try {
       useUIStore.getState().showToast("Validating...", "info");
-      const result = await validateGraphServer(g.id);
+      const result = await useGraphStore.getState().validateServer();
       useUIStore.getState().dismissToast();
 
       if (!result.valid && result.errors.length > 0) {

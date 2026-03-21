@@ -1,4 +1,3 @@
-import type { ValidationError } from "@api/graphs";
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { Button } from "@ui/Button";
 import { Dialog } from "@ui/Dialog";
@@ -122,7 +121,9 @@ function ValidationRow({
 }
 
 /** Convert server validation errors to ValidationItems */
-export function fromServerErrors(errors: ValidationError[]): ValidationItem[] {
+export function fromServerErrors(
+  errors: { message: string; node_ref: string | null }[],
+): ValidationItem[] {
   return errors.map((e) => ({
     message: e.message,
     nodeId: e.node_ref,

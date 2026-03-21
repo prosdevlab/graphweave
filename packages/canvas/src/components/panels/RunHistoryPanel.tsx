@@ -1,6 +1,6 @@
-import type { RunStatus } from "@api/runs";
 import { useCanvasContext } from "@contexts/CanvasContext";
 import { useGraphStore } from "@store/graphSlice";
+import type { RunStatus } from "@store/historySlice";
 import { useHistoryStore } from "@store/historySlice";
 import { useRunStore } from "@store/runSlice";
 import {

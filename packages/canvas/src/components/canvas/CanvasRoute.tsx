@@ -135,11 +135,10 @@ function CanvasWorkspace() {
 
   const runStatus = useRunStore((s) => s.runStatus);
 
-  // Panel sizes with localStorage persistence
-  const [sideWidth, setSideWidth] = useState(() => loadPanelSizes().sideWidth);
-  const [bottomHeight, setBottomHeight] = useState(
-    () => loadPanelSizes().bottomHeight,
-  );
+  // Panel sizes with localStorage persistence (parse once)
+  const [sizes] = useState(loadPanelSizes);
+  const [sideWidth, setSideWidth] = useState(sizes.sideWidth);
+  const [bottomHeight, setBottomHeight] = useState(sizes.bottomHeight);
   const sideWidthRef = useRef(sideWidth);
   const bottomHeightRef = useRef(bottomHeight);
   useEffect(() => {

@@ -1,7 +1,7 @@
 /** Graph CRUD service layer. */
 
 import type { GraphSchema } from "@shared/schema";
-import { request } from "./client";
+import { ApiError, apiUrl, request } from "./client";
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -100,17 +100,23 @@ export interface ValidateResponse {
 export async function validateGraphServer(
   graphId: string,
 ): Promise<ValidateResponse> {
-  const url = `/graphs/${encodeURIComponent(graphId)}/validate`;
-  const response = await fetch(`/api${url}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  // Server returns 200 with { valid, errors } even on validation failure
-  // It may also return 422 with errors in the body
-  const body = await response.json();
-  if (response.ok || response.status === 422) {
-    return body as ValidateResponse;
+  try {
+    // Server returns 200 with { valid: true } on success
+    return await request<ValidateResponse>(
+      `/graphs/${encodeURIComponent(graphId)}/validate`,
+      { method: "POST" },
+    );
+  } catch (e) {
+    // Server returns 422 with validation errors — request() throws ApiError
+    if (e instanceof ApiError && e.status === 422) {
+      // Re-fetch the body for the structured error response
+      const response = await fetch(
+        apiUrl(`/graphs/${encodeURIComponent(graphId)}/validate`),
+        { method: "POST", headers: { "Content-Type": "application/json" } },
+      );
+      const body = await response.json();
+      return body as ValidateResponse;
+    }
+    throw e;
   }
-  const detail = typeof body?.detail === "string" ? body.detail : null;
-  throw new Error(detail ?? `Validation request failed (${response.status})`);
 }
