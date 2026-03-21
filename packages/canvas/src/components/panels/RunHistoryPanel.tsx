@@ -6,7 +6,6 @@ import { useRunStore } from "@store/runSlice";
 import {
   AlertCircle,
   CheckCircle2,
-  Clock,
   Loader2,
   Pause,
   Trash2,
@@ -111,7 +110,10 @@ export function RunHistoryPanel() {
   const handleDelete = useCallback(
     (e: React.MouseEvent, runId: string) => {
       e.stopPropagation();
-      deleteRun(runId);
+      const confirmed = window.confirm(
+        `Delete run #${runId.slice(0, 6)}? This cannot be undone.`,
+      );
+      if (confirmed) deleteRun(runId);
     },
     [deleteRun],
   );
