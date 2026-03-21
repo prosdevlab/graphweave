@@ -1,6 +1,6 @@
 ---
 name: gw-frontend
-description: "React 19 patterns, Zustand store slices (graph/run/UI), React Flow v12 integration, SSE reconnection state machine, human-in-the-loop resume, client-side graph validation, debug panel, LLM router cost warning, shadcn/ui components, and Tailwind dark mode. Load when working on canvas, store slices, SSE connection, components, panels, validation, or run panel."
+description: "React 19 patterns, Zustand store slices (graph/run/UI/settings), React Flow v12 integration, SSE reconnection state machine, human-in-the-loop resume, client-side graph validation, debug panel, LLM router cost warning, shadcn/ui + Radix components, Tailwind dark mode, graph traversal utilities, auto-mapping presets, output key cascading, state panel, and settings store. Load when working on canvas, store slices, SSE connection, components, panels, validation, or run panel."
 disable-model-invocation: true
 ---
 
@@ -57,28 +57,39 @@ packages/canvas/src/
 ├── api/
 │   ├── client.ts     # base fetch wrapper + ApiError class
 │   ├── graphs.ts     # graph CRUD
-│   └── runs.ts       # run start/cancel/resume + SSE stream
+│   ├── runs.ts       # run start/cancel/resume + SSE stream
+│   └── settings.ts   # tool registry + provider status
 ├── components/
 │   ├── canvas/       # GraphCanvas, FloatingToolbar, StampGhost, CanvasHint,
 │   │   │               CanvasHeader, SnapConnectionLine, CanvasRoute,
-│   │   │               RunButton, RunInputDialog
-│   │   └── nodes/    # BaseNodeShell, StartNode, LLMNode, EndNode, nodeTypes
+│   │   │               RunButton, RunInputDialog, RunFormFields
+│   │   ├── nodes/    # BaseNodeShell, StartNode, LLMNode, EndNode,
+│   │   │               ConditionNode, HumanInputNode, ToolNode, nodeTypes
+│   │   └── runInputUtils.ts
 │   ├── home/         # HomeView, GraphCard, NewGraphDialog
-│   ├── panels/       # NodeConfigPanel, RunPanel, RunEventItem, ResumeForm
-│   │   └── config/   # StartNodeConfig, LLMNodeConfig, EndNodeConfig
-│   └── ui/           # Button, Card, Dialog, DropdownMenu, IconButton,
-│                       Input, Select, Sheet, Textarea, Toast, Tooltip
+│   ├── panels/       # NodeConfigPanel, RunPanel, RunEventItem, ResumeForm,
+│   │   │               AddFieldForm, StateFieldRow, StatePanel
+│   │   └── config/   # StartNodeConfig, LLMNodeConfig, EndNodeConfig,
+│   │                   ConditionBranchEditor, ConditionNodeConfig,
+│   │                   HumanInputNodeConfig, ToolNodeConfig, presetUtils
+│   ├── settings/     # SettingsPage
+│   └── ui/           # Button, Card, Combobox, Command, Dialog, DropdownMenu,
+│                       IconButton, Input, Popover, Select (Radix), Sheet,
+│                       Textarea, Toast, Tooltip
 ├── constants/        # toolbarItems.ts
 ├── contexts/         # CanvasContext (selectedNode, stampNodeType, rfInstance)
 ├── hooks/            # useNodePlacement, useNodeDrop, useBeforeUnload
 ├── store/
-│   ├── graphSlice.ts # graph CRUD, nodes/edges, spliceEdge, save/load
+│   ├── graphSlice.ts # graph CRUD, nodes/edges, spliceEdge, save/load, renameOutputKey
 │   ├── runSlice.ts   # SSE lifecycle, reconnection, start/cancel/resume
+│   ├── settingsSlice.ts # tool registry, provider status (fetch-once cache)
 │   └── uiSlice.ts    # darkMode, panelLayout, lastOpenedGraphId,
 │                       newGraphDialogOpen, toast (message + variant)
 ├── styles/           # tokens.ts (color/spacing design tokens)
 ├── types/            # canvas.ts, mappers.ts (NodeSchema ↔ RF Node)
-└── utils/            # nodeDefaults.ts (NODE_DEFAULTS, SINGLETON_TYPES, findNearestEdge)
+└── utils/            # nodeDefaults.ts (NODE_DEFAULTS, SINGLETON_TYPES, findNearestEdge,
+                        isAutoOutputKey, deduplicateOutputKey),
+                        graphTraversal.ts, validateGraph.ts
 ```
 
 ## Zustand store shape
@@ -101,6 +112,22 @@ interface RunSlice {
   cancelRun: () => Promise<void>
   resumeRun: (input: unknown) => Promise<void>
   resetRun: () => void
+}
+
+// graphSlice.ts — Phase 4 additions
+renameOutputKey: (nodeId: string, oldKey: string, newKey: string) => void;
+// Atomic: updates source node + rewrites downstream input_maps + condition fields + state entries
+
+// settingsSlice.ts — NEW in Phase 4
+interface SettingsSlice {
+  tools: ToolInfo[];              // from @api/settings
+  toolsLoaded: boolean;
+  toolsError: string | null;
+  providers: Record<string, ProviderStatus> | null;  // from @api/settings
+  providersLoaded: boolean;
+  providersError: string | null;
+  loadTools: () => Promise<void>;
+  loadProviders: () => Promise<void>;
 }
 
 // uiSlice.ts — UI preferences only, no credentials
@@ -164,6 +191,50 @@ Patterns from Canvas Phase 2 — follow these in subsequent phases:
 - **`terminalReceived` guard** — module-level flag set before disconnecting on terminal events, prevents `onerror` → reconnection race after `graph_completed`
 - **Output truncation** — `RunEventItem` caps output display at 2000 chars to prevent DOM bloat from large LLM responses
 - **Dialog state reset** — `RunInputDialog` resets form state via `useEffect` when `open` transitions to `true`
+
+## Phase 3-4 patterns
+
+Patterns from Canvas Phases 3-4 — follow these in subsequent phases:
+
+### Graph traversal utilities (`utils/graphTraversal.ts`)
+- **`getUpstreamNodeIds(nodeId, edges)`** — BFS backward walk returning ancestor node IDs
+- **`getRelevantFields(nodeId, stateFields, nodes, edges)`** — state fields visible to a node: input fields + upstream outputs only (excludes own output, downstream, siblings)
+- **`isTerminalNode(nodeId, edges, nodes)`** — true if node's only outgoing edges go to End (or has none). Controls whether output_key field is shown.
+- **`rewriteStateExpression(expr, oldKey, newKey)`** — rewrites root key in expressions like `old[-1].content` → `new[-1].content`
+
+### Auto-mapping (`components/panels/config/presetUtils.ts`)
+- **`autoMapParams(toolParams, stateFields, claimedInputKeys?)`** — auto-maps tool params to state fields with precedence: exact match → user_input → enum literal → auto-create → __default__
+- **`getClaimedInputKeys(graphNodes, excludeNodeId)`** — collects root state keys already consumed by other nodes, prevents user_input sharing
+- **`buildPresetsForParam(stateFields, paramType?, sourceLabels?)`** — type-filtered dropdown presets with source node hints
+- **`isEnumLike(param)`** — detects params with 2-5 short example values (mapped to quoted literals)
+
+### Output key management (`utils/nodeDefaults.ts` + `store/graphSlice.ts`)
+- **`isAutoOutputKey(key, toolName?)`** — detects auto-generated keys like `tool_result`, `{tool}_result`
+- **`deduplicateOutputKey(desired, existingKeys)`** — appends `_2`, `_3` etc. to avoid collisions
+- **`renameOutputKey(nodeId, oldKey, newKey)`** — atomic store action: updates source node + rewrites all downstream input_maps + condition fields + state entries
+- **Cascade on blur, not keystroke** — output_key edits fire onChange per keystroke but cascade only on blur via `committedOutputKeyRef`
+
+### State panel (`components/panels/StatePanel.tsx`)
+- **3 entry points**: toolbar icon, config panel "Manage fields →" link, dropdown "+ New field..."
+- **StateFieldRow**: inline editing, usage tracking (which nodes read/write each field), delete with undo toast (5s)
+- **AddFieldForm**: type and reducer selection, dedup against existing keys
+- **`DEFAULT_FIELD_KEYS`** — `Set<string>` of `messages`, `user_input`, `llm_response` (cannot be removed)
+
+### Settings store (`store/settingsSlice.ts`)
+- **`loadTools()`** — fetches tool registry from `/settings/tools`, cached
+- **`loadProviders()`** — fetches provider status + model lists from `/settings/providers`, falls back to hardcoded defaults
+- **Fetch-once pattern**: tools/providers loaded once, cached in store
+
+### Radix Select (`components/ui/Select.tsx`)
+- All selects use Radix-based compound component (SelectTrigger, SelectContent, SelectItem)
+- `description` prop on SelectItem for secondary text (e.g., source node hints)
+- Dark theme matching existing zinc-900 palette
+
+### Input map editor pattern (ToolNodeConfig + LLMNodeConfig)
+- **Collapsed view**: summary rows with check/warning icons, param ← source labels
+- **Expanded view**: card editor with type-filtered dropdowns, custom expression input, mapping warnings
+- **Suggestion chips** (LLM only): clickable presets for upstream output fields
+- **`toRecord(rows)`** — filters __default__ sentinel before persisting to input_map
 
 ## Settings panel — read-only, no key input
 
