@@ -6,8 +6,8 @@ services:
       - ./packages/execution:/app
       - ./data:/data
     ports:
-      - "8000:8000"
+      - "8001:8001"
     command: >
-      sh -c "pip install uv && uv sync && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+      sh -c "pip install uv && uv sync && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8001"
     env_file:
       - ./packages/execution/.env
