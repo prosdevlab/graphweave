@@ -61,6 +61,22 @@ Biome handles formatting and linting. No ESLint.
 
 ---
 
+## Context backpressure
+
+Three hooks manage output automatically:
+
+1. **PreToolUse** wraps test/lint/build commands in `scripts/run_silent.sh`:
+   success → `✓ command (Xs)`, failure → filtered output only.
+2. **PostToolUse** auto-lints after every Write/Edit via biome (TS) or
+   ruff (Python). Lint failures block until fixed — do not suppress them.
+3. **Fail-fast** flags (`pytest -x`, `vitest --bail 1`) are injected
+   automatically.
+
+Do not pipe to `/dev/null` or truncate with `head`/`tail`. The hooks
+handle it. For full debug output, prefix with `env VERBOSE=1`.
+
+---
+
 ## Skills (load when relevant)
 
 ```
