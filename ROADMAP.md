@@ -36,36 +36,39 @@ Close the gap between "runs in GraphWeave" and "runs anywhere."
   deploy it to Cloud Run."
 - "I want to click Export in the canvas and get a zip file I can run."
 
-### 1.1 Plugin System
+### 1.1 Custom Tools
 
-A plugin is a self-contained package that extends GraphWeave. Plugins can
-provide any combination of:
+Users define custom tools as Python functions with a parameter schema. A tool
+is a single function — name, description, parameters, implementation. No
+framework, no boilerplate.
 
-- **Tools** — Python functions agents can call (Slack, Jira, SQL, etc.)
-- **Node types** — custom nodes beyond the built-in 6 (e.g. RAG Retriever,
-  Batch Processor, Code Executor)
-- **Templates** — pre-built graphs that use the plugin's capabilities
-- **Provider integrations** — new LLM providers beyond OpenAI/Anthropic/Gemini
+```python
+# This is a tool. That's it.
+def slack_send(channel: str, message: str) -> dict:
+    resp = requests.post("https://slack.com/api/chat.postMessage", ...)
+    return {"success": True, "result": f"Sent to {channel}"}
+```
 
-Plugins are pure Python functions with capability injection — no classes to
-inherit, no framework lock-in. Architecture inspired by
-[SDK Kit](https://github.com/lytics/sdk-kit)'s capability-based plugin model.
+Tools are created via the UI (name + params + function body) or by importing a
+`.json`/`.py` file. They register alongside the built-in 8 and work in any
+tool node. They export cleanly — no stubs.
 
-Three distribution formats, from simplest to most shareable:
+Shareable as files: export a tool, hand it to someone, they import it. No
+plugin system required for simple sharing.
 
-1. **Single file** — drop a `.py` file into `plugins/`. Good for personal tools.
-2. **Directory** — plugin with templates, manifest, and pip deps. Shareable as
-   a zip or git repo.
-3. **pip package** — `pip install graphweave-plugin-slack`. Discoverable via
-   Python entry points. The community contribution path.
+The tool builder supports three creation modes:
 
-The built-in 8 tools become the "core" plugin — same interface, nothing
-special about them. This validates the plugin system works before community
-plugins are built.
+- **HTTP Request** (no code) — method, URL, headers, body mapping. Covers
+  most API-based tools: Slack, Jira, GitHub, Stripe, any REST API.
+- **SQL Query** (no code) — connection string + SQL template with `{{param}}`
+  placeholders. Covers database tools: Postgres, MySQL, MongoDB.
+- **Code** (advanced) — Monaco editor with syntax highlighting for tools that
+  need logic: parsing, loops, conditionals, external binaries.
 
-**Design:** [`.claude/gw-plans/plugins/overview.md`](.claude/gw-plans/plugins/overview.md)
-**Outcome:** extensible platform where anyone can contribute tools, nodes,
-and templates that the whole community can install and use.
+**Changes:** tool registry, DB schema (tools table), canvas tool dropdown,
+tool creation UI (form builders + code editor), import/export endpoints
+**Outcome:** users can create and share tools like `slack_send`, `jira_create`,
+`semantic_search` and use them in any graph — most without writing code.
 
 ### 1.2 Fix Tool Export
 
@@ -160,29 +163,61 @@ stored, optional webhook/notification on state changes.
 
 **Outcome:** Agents that provide ongoing value, not one-off demos.
 
-### 2.4 Community Plugin Registry
+### 2.4 Plugin System
 
-A GitHub repo (`graphweave/community-plugins`) where users contribute plugins
-via PR. Browsable from the UI — search, preview, one-click install.
+A plugin bundles related tools + templates + config into a distributable
+package. Built on top of custom tools — the packaging layer for when you want
+to share a coherent set of capabilities, not just individual functions.
 
-Categories: messaging (Slack, Discord), project management (Jira, Linear),
-data (SQL, vector search), APIs (GitHub, Stripe), AI (embeddings, RAG),
-developer tools (git, code analysis).
+A Slack plugin ships `slack_send` + `slack_read` + `slack_search` tools AND a
+"Customer Support Agent" template that uses them. Install the plugin, get
+everything.
+
+Architecture inspired by [SDK Kit](https://github.com/lytics/sdk-kit)'s
+capability-based model. The built-in 8 tools become the "core" plugin.
+
+**Design:** [`.claude/gw-plans/plugins/overview.md`](.claude/gw-plans/plugins/overview.md)
+**Outcome:** structured distribution for bundles of tools + templates.
+
+### 2.5 Community Registry
+
+Three browsable registries — tools, plugins, and templates — all backed by
+open GitHub repos. Search, filter by category, preview, one-click install.
+
+**Tool registry** (`graphweave/community-tools`):
+Individual tools contributed by the community. Browsable by category:
+
+| Category | Examples |
+|----------|---------|
+| Communication | Slack, Discord, Teams, Email, SMS, Webhook |
+| Developer | GitHub, GitLab, CI/CD, code search, package lookup |
+| Project Management | Jira, Linear, Asana, Trello, Notion |
+| Data & Storage | SQL, MongoDB, Redis, S3, Google Sheets |
+| AI & Search | Vector DB, embeddings, web scrape, RSS |
+| CRM & Support | Salesforce, HubSpot, Zendesk, Intercom |
+| Content | Image generation, TTS, translation, CMS publish |
+| Finance | Stripe, QuickBooks, invoice, payment |
+
+**Plugin registry** (`graphweave/community-plugins`):
+Bundles of related tools + templates. Install a plugin, get a full capability
+set.
+
+**Template registry** (part of community-plugins):
+Pre-built agents by use case. Clone, customize, run.
 
 Contribution flow:
-1. Build a plugin locally (single file or directory)
+1. Build a tool or plugin locally
 2. Test it in your GraphWeave instance
-3. Package as a pip-installable plugin
-4. Submit a PR to `community-plugins` with manifest + README
-5. After review, it appears in the in-app plugin browser
+3. Submit a PR to the appropriate community repo
+4. After review, it appears in the in-app browser
 
-Not a marketplace with accounts and payments — an open repo that anyone can
+Not a marketplace with accounts and payments — open repos that anyone can
 contribute to and install from. Same model as Claude Code's plugin ecosystem.
 
-**Outcome:** the plugin ecosystem grows through community contributions.
-Building an agent for a new use case starts with "is there a plugin for that?"
+**Outcome:** the ecosystem grows through community contributions.
+Building an agent starts with "is there a tool for that?"
 
-### 2.5 Dev-Agent Template
+### 2.6 Dev-Agent Template
 
 Rebuild [lytics/dev-agent](https://github.com/lytics/dev-agent) as a
 GraphWeave plugin. Ships with tools (semantic search, GitHub issues, git
@@ -201,9 +236,14 @@ pipeline with community-contributed tools.
 
 These are separate repos that build on GraphWeave's API and export formats:
 
-- **GraphWeave CLI (`gw`)** — terminal interface for running, serving, and
-  managing graphs. `gw run`, `gw serve` (MCP mode), `gw dev`. Separate
-  packaging, separate release cycle.
+- **GraphWeave CLI (`gw`)** — terminal interface for the full GraphWeave
+  workflow. Separate packaging, separate release cycle.
+  - `gw run <graph>` — run a graph, stream output to terminal
+  - `gw serve <graph>` — serve a graph as an MCP server
+  - `gw install <tool|plugin>` — install from community registry
+  - `gw search "slack"` — search tools and plugins
+  - `gw export <graph> --format mcp` — export a graph
+  - `gw dev` — start UI + execution engine
 
 ---
 

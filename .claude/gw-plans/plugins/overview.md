@@ -4,12 +4,127 @@
 
 ## Goal
 
-A plugin is a self-contained package that extends GraphWeave with tools, node
-types, templates, and provider integrations. Plugins are the mechanism for
-community contributions and the foundation for the tool/agent ecosystem.
+Two layers of extensibility:
+
+1. **Tools** — individual functions users create and share. The atom.
+2. **Plugins** — bundles of tools + templates + config. The molecule.
+
+Tools are the immediate value — users can add their own tools without learning
+a plugin framework. Plugins are the distribution layer — structure for sharing
+coherent capability sets with the community.
 
 Inspired by [SDK Kit](https://github.com/lytics/sdk-kit)'s capability-based
 plugin architecture, adapted for Python and LangGraph.
+
+---
+
+## Custom tools (standalone, no plugin required)
+
+A tool is a Python function with a parameter schema. Three creation modes:
+
+### HTTP Request builder (no code)
+
+Most tools are API calls. The form builder handles these:
+
+```
+Tool Name:    slack_send
+Description:  Send a message to a Slack channel
+
+Parameters:
+  channel     string    required
+  message     string    required
+
+Request:
+  POST  https://slack.com/api/chat.postMessage
+  Headers:
+    Authorization: Bearer ${SLACK_BOT_TOKEN}
+    Content-Type: application/json
+  Body:
+    { "channel": {{channel}}, "text": {{message}} }
+
+Response mapping:
+  success: response.ok
+  result:  response.message.text
+```
+
+The engine generates the Python implementation from the form. Exports cleanly
+because the structure is known.
+
+### SQL Query builder (no code)
+
+For database tools:
+
+```
+Tool Name:    get_user_orders
+Description:  Fetch recent orders for a user
+
+Parameters:
+  user_id     string    required
+  limit       number    default=10
+
+Connection:   ${DATABASE_URL}
+Query:        SELECT * FROM orders WHERE user_id = {{user_id}}
+              ORDER BY created_at DESC LIMIT {{limit}}
+
+Response mapping:
+  success: true if rows returned
+  result:  rows as list of dicts
+```
+
+### Code editor (advanced)
+
+Monaco editor with syntax highlighting. Function signature pre-filled:
+
+```python
+def semantic_search(query: str, top_k: int = 5) -> dict:
+    """Search codebase by meaning."""
+    import chromadb
+    client = chromadb.Client()
+    collection = client.get_collection("code")
+    results = collection.query(query_texts=[query], n_results=top_k)
+    return {"success": True, "result": results}
+```
+
+### Tool categories
+
+Tools in the registry are browsable by category:
+
+| Category | Examples | Typical builder |
+|----------|---------|----------------|
+| Communication | Slack, Discord, Teams, Email, SMS, Webhook | HTTP Request |
+| Developer | GitHub, GitLab, CI/CD, code search | HTTP Request |
+| Project Management | Jira, Linear, Asana, Trello, Notion | HTTP Request |
+| Data & Storage | SQL, MongoDB, Redis, S3, Sheets | SQL / Code |
+| AI & Search | Vector DB, embeddings, web scrape, RSS | Code |
+| CRM & Support | Salesforce, HubSpot, Zendesk, Intercom | HTTP Request |
+| Content | Image gen, TTS, translation, CMS | HTTP Request |
+| Finance | Stripe, QuickBooks, invoice | HTTP Request |
+| System | File ops, shell commands, cron | Code |
+
+Most categories are dominated by HTTP Request tools — REST APIs are the
+lingua franca of integrations.
+
+### Tool sharing
+
+Tools are portable as `.json` files:
+
+```json
+{
+  "name": "slack_send",
+  "description": "Send a message to a Slack channel",
+  "category": "communication",
+  "builder": "http_request",
+  "params": [...],
+  "config": {
+    "method": "POST",
+    "url": "https://slack.com/api/chat.postMessage",
+    "headers": {"Authorization": "Bearer ${SLACK_BOT_TOKEN}"},
+    "body_template": "..."
+  }
+}
+```
+
+Export a tool, hand it to someone, they import it. No plugin system required.
 
 ---
 
